@@ -23,14 +23,6 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
 
       if (e.type === 'keydown' || e.type === 'keyup') {
         eventData.key = e.key;
-        // Detect Ctrl+V / Cmd+V copy-paste keyboard shortcut in code editor
-        if (e.type === 'keydown' && (e.ctrlKey || e.metaKey) && e.key?.toLowerCase() === 'v') {
-          eventsBuffer.current.push({
-            type: 'paste',
-            timestamp: Date.now(),
-            length: 50 // Default estimation for shortcut paste
-          });
-        }
       } else if (e.type === 'mousemove' || e.type === 'pointermove') {
         eventData.type = 'mousemove'; // normalize
         eventData.x = e.clientX;
@@ -65,21 +57,51 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
       handleEvent(e);
       if (e.pointerType) pointerTypes.current.add(e.pointerType);
     });
-    document.addEventListener('visibilitychange', handleEvent);
 
     const handlePaste = (e) => {
       // Ignore paste events on non-editor inputs (like entering 6-digit session PIN)
       if (e.target && (e.target.tagName === 'INPUT' || e.target.closest('.session-pin-input'))) {
         return;
       }
+      
+      const lastEvent = eventsBuffer.current[eventsBuffer.current.length - 1];
+      const now = Date.now();
+      // Deduplicate: avoid pushing double paste events within 300ms
+      if (lastEvent && lastEvent.type === 'paste' && (now - lastEvent.timestamp < 300)) {
+        return;
+      }
+
       eventsBuffer.current.push({
         type: 'paste',
-        timestamp: Date.now(),
+        timestamp: now,
         length: e.clipboardData?.getData('text')?.length || 50
       });
     };
     // Use capture phase (true) so Monaco Editor's internal event stopping doesn't miss paste events
     document.addEventListener('paste', handlePaste, true);
+
+    // Tab-switch and window blur tracking with immediate transmission
+    const handleTabBlur = () => {
+      const lastEvent = eventsBuffer.current[eventsBuffer.current.length - 1];
+      const now = Date.now();
+      if (lastEvent && (lastEvent.type === 'visibilitychange' || lastEvent.type === 'blur') && (now - lastEvent.timestamp < 500)) {
+        return;
+      }
+      eventsBuffer.current.push({
+        type: 'visibilitychange',
+        hidden: true,
+        timestamp: now
+      });
+      // Immediately send window so proctor control room receives tab switch alert without delay
+      setTimeout(() => sendWindow(), 50);
+    };
+
+    window.addEventListener('blur', handleTabBlur);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        handleTabBlur();
+      }
+    });
 
     const sendWindow = async () => {
       const events = [...eventsBuffer.current];

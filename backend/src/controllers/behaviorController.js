@@ -27,7 +27,7 @@ const extractFeatures = (events) => {
     if (e.type === 'keyup') keyups.push(e);
     if (e.type === 'mousemove') mousemoves.push(e);
     if (e.type === 'click') clicks++;
-    if (e.type === 'visibilitychange' && e.hidden) blurs++;
+    if ((e.type === 'visibilitychange' && e.hidden) || e.type === 'blur') blurs++;
   });
 
   // Dwell times (time between keydown and keyup for same key)
@@ -312,7 +312,7 @@ const scoreWindow = async (req, res) => {
     // own action/risk_level instead of a locally-recomputed z-score
     // threshold, since that logic (and its thresholds) now lives there.
     if ((verifyResult.action === 'deny' || verifyResult.action === 'step_up') && !session.alreadyFlaggedRecently) {
-      const alert = await BehaviorAlert.create({
+      await BehaviorAlert.create({
         student: studentId,
         session: req.body.session || examId.toString(),
         exam: examId,
@@ -323,7 +323,8 @@ const scoreWindow = async (req, res) => {
         severity: verifyResult.action === 'deny' ? 'high' : 'medium',
         reviewed: false
       });
-      broadcastAnomaly(examId, studentId, alert);
+      // Rhythm changes are tracked live via broadcastLiveScore (Trust score bar),
+      // so we do not flood the Anomaly Event Stream feed with rhythm messages.
 
       session.alreadyFlaggedRecently = true;
       session.flagTimeoutEnd = new Date(now + 60000);

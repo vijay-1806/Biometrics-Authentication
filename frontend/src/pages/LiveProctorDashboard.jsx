@@ -58,6 +58,7 @@ export default function LiveProctorDashboard() {
       });
 
       socket.on('student-anomaly', ({ studentId, alert }) => {
+        if (alert.alertType === 'behavioral_anomaly') return; // Rhythm changes are tracked live via Trust Score bar
         setStudents(currentStudents => {
           const student = currentStudents.find(s => 
             String(s._id) === String(studentId) || 
