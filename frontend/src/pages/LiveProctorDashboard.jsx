@@ -337,6 +337,7 @@ export default function LiveProctorDashboard() {
               </tbody>
             </table>
           </div>
+        </div>
       </div>
     );
   }
