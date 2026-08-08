@@ -53,8 +53,9 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // Fetch user profile on load if token exists
+  // Fetch user profile on load & heartbeat check for single-session eviction
   useEffect(() => {
+    let intervalId;
     const fetchUser = async () => {
       if (token) {
         try {
@@ -62,14 +63,31 @@ export const AuthProvider = ({ children }) => {
           setUser(res.data);
         } catch (err) {
           console.error('Failed to fetch profile', err);
-          // Token expired or invalid
           setToken('');
           setUser(null);
         }
+      } else {
+        setUser(null);
       }
       setLoading(false);
     };
+
     fetchUser();
+
+    // Heartbeat every 5 seconds to detect single-session eviction when logged in from another device
+    if (token) {
+      intervalId = setInterval(async () => {
+        try {
+          await axios.get('/api/auth/profile');
+        } catch (err) {
+          // Interceptor will trigger force-logout if 401 sessionExpired
+        }
+      }, 5000);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [token]);
 
   const login = async (email, password) => {

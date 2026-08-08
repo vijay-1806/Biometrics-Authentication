@@ -23,8 +23,8 @@ const protect = async (req, res, next) => {
         return res.status(401).json({ message: 'Not authorized, user not found' });
       }
 
-      // Single active session enforcement: if account logged in from another device, invalidate previous session
-      if (decoded.sessionId && req.user.sessionId && decoded.sessionId !== req.user.sessionId) {
+      // Single active session enforcement: if account logged in from another device (or token lacks sessionId), invalidate previous session
+      if (req.user.sessionId && decoded.sessionId !== req.user.sessionId) {
         return res.status(401).json({ 
           message: 'Account logged in from another device', 
           sessionExpired: true 
