@@ -130,36 +130,38 @@ const getIo = () => {
 // Helper for behaviorController to broadcast an anomaly
 const broadcastAnomaly = (examId, studentId, alertPayload) => {
   if (!io) return;
-  // Find if this exam has an active session and this student is in it
+  const studentIdStr = String(studentId);
   for (const pin in sessions) {
     const session = sessions[pin];
-    if (session.examId.toString() === examId.toString()) {
-      // Send directly to the teacher's socket
+    const isStudentInSession = Object.values(session.students || {}).some(
+      s => String(s._id || s.id || '') === studentIdStr
+    );
+    if (isStudentInSession || !examId || String(session.examId) === String(examId)) {
       io.to(session.teacherSocketId).emit('student-anomaly', {
-        studentId,
+        studentId: studentIdStr,
         alert: alertPayload
       });
-      console.log(`Broadcasted live anomaly to teacher for student ${studentId}`);
+      console.log(`Broadcasted live anomaly to teacher for student ${studentIdStr}`);
     }
   }
 };
 
-// NEW: Helper for behaviorController to broadcast a live trust-score
-// update. Follows the exact same lookup pattern as broadcastAnomaly --
-// find the in-memory session(s) for this examId, push straight to the
-// teacher's socket. Fires on every scored window (~every 5s per student),
-// not just on anomalies, so the teacher dashboard can show a continuously
-// updating trust score rather than only a feed of past alerts.
+// Helper for behaviorController to broadcast a live trust-score & telemetry update
 const broadcastLiveScore = (examId, studentId, data) => {
   if (!io) return;
+  const studentIdStr = String(studentId);
   for (const pin in sessions) {
     const session = sessions[pin];
-    if (session.examId.toString() === examId.toString()) {
+    const isStudentInSession = Object.values(session.students || {}).some(
+      s => String(s._id || s.id || '') === studentIdStr
+    );
+    if (isStudentInSession || !examId || String(session.examId) === String(examId)) {
       io.to(session.teacherSocketId).emit('live_score', {
-        studentId,
+        studentId: studentIdStr,
         ...data,
         timestamp: Date.now()
       });
+      console.log(`Broadcasted live_score to teacher for student ${studentIdStr}: tabBlurCount=${data.tabBlurCount}`);
     }
   }
 };
