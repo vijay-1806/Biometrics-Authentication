@@ -43,7 +43,8 @@ export default function LiveProctorDashboard() {
   // Handle Socket Events
   useEffect(() => {
     if (sessionPin) {
-      socketRef.current = io('http://localhost:5000', { transports: ['websocket'] });
+      const socketUrl = `${window.location.protocol}//${window.location.hostname}:5000`;
+      socketRef.current = io(socketUrl, { transports: ['websocket', 'polling'] });
       const socket = socketRef.current;
 
       socket.emit('create-session', { examId: selectedAssessment, pin: sessionPin });
@@ -58,8 +59,11 @@ export default function LiveProctorDashboard() {
 
       socket.on('student-anomaly', ({ studentId, alert }) => {
         setStudents(currentStudents => {
-          const student = currentStudents.find(s => (s._id === studentId || s.id === studentId));
-          const enrichedAlert = { ...alert, student: student || { name: 'Unknown Student' } };
+          const student = currentStudents.find(s => 
+            String(s._id) === String(studentId) || 
+            String(s.id) === String(studentId)
+          );
+          const enrichedAlert = { ...alert, student: student || (currentStudents[0] ? currentStudents[0] : { name: 'Candidate Student' }) };
           setLiveAlerts(prev => [enrichedAlert, ...prev]);
           return currentStudents;
         });

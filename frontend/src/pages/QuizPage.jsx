@@ -86,7 +86,8 @@ const QuizPage = () => {
     if (!sessionPinInput) return;
     setSessionError('');
     
-    socketRef.current = io('http://localhost:5000', { transports: ['websocket'] });
+    const socketUrl = `${window.location.protocol}//${window.location.hostname}:5000`;
+    socketRef.current = io(socketUrl, { transports: ['websocket', 'polling'] });
     const socket = socketRef.current;
     
     socket.emit('join-session', { pin: sessionPinInput, student: { id: user._id, name: user.name, email: user.email } });

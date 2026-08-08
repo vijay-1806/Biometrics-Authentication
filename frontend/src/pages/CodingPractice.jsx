@@ -82,7 +82,8 @@ const CodingPractice = () => {
     if (!sessionPinInput) return;
     setSessionError('');
     
-    socketRef.current = io('http://localhost:5000', { transports: ['websocket', 'polling'] });
+    const socketUrl = `${window.location.protocol}//${window.location.hostname}:5000`;
+    socketRef.current = io(socketUrl, { transports: ['websocket', 'polling'] });
     const socket = socketRef.current;
     
     socket.emit('join-session', { pin: sessionPinInput, student: { id: user._id, name: user.name, email: user.email } });
@@ -198,15 +199,6 @@ const CodingPractice = () => {
               >
                 Join Proctor Session
               </button>
-
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  onClick={handleBypassSession}
-                  className="text-xs text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 font-semibold underline"
-                >
-                  Or enter Direct Practice Mode (Skip PIN requirement)
-                </button>
-              </div>
             </>
           ) : (
             <>
@@ -221,13 +213,6 @@ const CodingPractice = () => {
                 <div className="w-3 h-3 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
                 <div className="w-3 h-3 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
               </div>
-              
-              <button
-                onClick={handleBypassSession}
-                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-lg"
-              >
-                Start Coding Now (Skip Waiting)
-              </button>
             </>
           )}
         </div>

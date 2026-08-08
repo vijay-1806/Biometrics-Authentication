@@ -257,8 +257,9 @@ const scoreWindow = async (req, res) => {
       session.initialDeviceInfo = deviceInfo;
     }
 
-    // Copy-paste detection (unchanged, still rule-based)
+    // Copy-paste detection
     if (explicitFlags.pasteCount > 0) {
+      session.pasteCount = (session.pasteCount || 0) + explicitFlags.pasteCount;
       const alert = await BehaviorAlert.create({
         student: studentId,
         exam: examId,
@@ -274,8 +275,9 @@ const scoreWindow = async (req, res) => {
       broadcastAnomaly(examId, studentId, alert);
     }
 
-    // Tab-switch detection (unchanged, still rule-based)
+    // Tab-switch detection
     if (explicitFlags.tabBlurCount > 0) {
+      session.tabBlurCount = (session.tabBlurCount || 0) + explicitFlags.tabBlurCount;
       const alert = await BehaviorAlert.create({
         student: studentId,
         exam: examId,
@@ -343,8 +345,8 @@ const scoreWindow = async (req, res) => {
       smoothedScore: session.smoothedScore,
       riskLevel: verifyResult.risk_level,
       action: verifyResult.action,
-      tabBlurCount: explicitFlags.tabBlurCount,
-      pasteCount: explicitFlags.pasteCount,
+      tabBlurCount: session.tabBlurCount || 0,
+      pasteCount: session.pasteCount || 0,
       totalWindowsScored: session.totalWindowsScored
     });
 

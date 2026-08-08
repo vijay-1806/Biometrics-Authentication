@@ -23,6 +23,14 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
 
       if (e.type === 'keydown' || e.type === 'keyup') {
         eventData.key = e.key;
+        // Detect Ctrl+V / Cmd+V copy-paste keyboard shortcut in code editor
+        if (e.type === 'keydown' && (e.ctrlKey || e.metaKey) && e.key?.toLowerCase() === 'v') {
+          eventsBuffer.current.push({
+            type: 'paste',
+            timestamp: Date.now(),
+            length: 50 // Default estimation for shortcut paste
+          });
+        }
       } else if (e.type === 'mousemove' || e.type === 'pointermove') {
         eventData.type = 'mousemove'; // normalize
         eventData.x = e.clientX;
@@ -59,16 +67,19 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
     });
     document.addEventListener('visibilitychange', handleEvent);
 
-    // FIX: was `eventsRef.current` — that ref doesn't exist, this threw
-    // a ReferenceError on every paste event and silently dropped it.
     const handlePaste = (e) => {
+      // Ignore paste events on non-editor inputs (like entering 6-digit session PIN)
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.closest('.session-pin-input'))) {
+        return;
+      }
       eventsBuffer.current.push({
         type: 'paste',
         timestamp: Date.now(),
-        length: e.clipboardData?.getData('text')?.length || 0
+        length: e.clipboardData?.getData('text')?.length || 50
       });
     };
-    document.addEventListener('paste', handlePaste);
+    // Use capture phase (true) so Monaco Editor's internal event stopping doesn't miss paste events
+    document.addEventListener('paste', handlePaste, true);
 
     const sendWindow = async () => {
       const events = [...eventsBuffer.current];
