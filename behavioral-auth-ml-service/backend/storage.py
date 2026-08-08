@@ -19,16 +19,6 @@ def _model_file(user_id):
 def load_user(user_id):
     path = _user_file(user_id)
     if not os.path.exists(path):
-        if os.path.exists(_user_file("6a76a437f5922b18a8d0c3b0")):
-            with open(_user_file("6a76a437f5922b18a8d0c3b0")) as f:
-                data = json.load(f)
-                data["user_id"] = user_id
-                return data
-        elif os.path.exists(_user_file("vijay")):
-            with open(_user_file("vijay")) as f:
-                data = json.load(f)
-                data["user_id"] = user_id
-                return data
         return {
             "user_id": user_id,
             "enroll_samples": [],       # list of feature vectors (lists)
@@ -37,17 +27,7 @@ def load_user(user_id):
             "recent_scores": [],        # rolling trust scores for smoothing (last N)
         }
     with open(path) as f:
-        data = json.load(f)
-        if not data.get("enroll_samples"):
-            if os.path.exists(_user_file("6a76a437f5922b18a8d0c3b0")):
-                with open(_user_file("6a76a437f5922b18a8d0c3b0")) as fallback_f:
-                    fb = json.load(fallback_f)
-                    data["enroll_samples"] = fb.get("enroll_samples", [])
-            elif os.path.exists(_user_file("vijay")):
-                with open(_user_file("vijay")) as fallback_f:
-                    fb = json.load(fallback_f)
-                    data["enroll_samples"] = fb.get("enroll_samples", [])
-        return data
+        return json.load(f)
 
 
 def save_user(user_id, data):
@@ -62,10 +42,6 @@ def save_model(user_id, model_bundle):
 def load_model(user_id):
     path = _model_file(user_id)
     if not os.path.exists(path):
-        if os.path.exists(_model_file("6a76a437f5922b18a8d0c3b0")):
-            return joblib.load(_model_file("6a76a437f5922b18a8d0c3b0"))
-        elif os.path.exists(_model_file("vijay")):
-            return joblib.load(_model_file("vijay"))
         return None
     return joblib.load(path)
 
