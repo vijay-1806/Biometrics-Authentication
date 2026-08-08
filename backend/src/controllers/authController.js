@@ -70,8 +70,7 @@ const loginUser = async (req, res) => {
 
     if (user && (await user.matchPassword(password))) {
       const sessionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
-      user.sessionId = sessionId;
-      await user.save();
+      await User.findByIdAndUpdate(user._id, { sessionId });
 
       res.json({
         _id: user._id,
