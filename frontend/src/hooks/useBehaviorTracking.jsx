@@ -87,28 +87,33 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
     document.addEventListener('paste', handlePaste, true);
 
     // Tab-switch and window blur tracking with immediate transmission
-    const handleTabBlur = () => {
+    const handleTabBlur = (source = 'tab_switch') => {
       const lastEvent = eventsBuffer.current[eventsBuffer.current.length - 1];
       const now = Date.now();
-      if (lastEvent && (lastEvent.type === 'visibilitychange' || lastEvent.type === 'blur') && (now - lastEvent.timestamp < 500)) {
+      if (lastEvent && (lastEvent.type === 'visibilitychange' || lastEvent.type === 'blur') && (now - lastEvent.timestamp < 300)) {
         return;
       }
       eventsBuffer.current.push({
         type: 'visibilitychange',
         hidden: true,
+        source: source,
         timestamp: now
       });
-      // Immediately send window so proctor control room receives tab switch alert without delay
-      setTimeout(() => sendWindow(), 50);
+      // Force immediate send without event count throttling
+      setTimeout(() => sendWindow(true), 10);
     };
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        handleTabBlur();
+        handleTabBlur('visibilitychange');
       }
     };
 
-    window.addEventListener('blur', handleTabBlur);
+    const handleWindowBlur = () => {
+      handleTabBlur('blur');
+    };
+
+    window.addEventListener('blur', handleWindowBlur);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const sendWindow = async (force = false) => {

@@ -179,7 +179,7 @@ const scoreWindow = async (req, res) => {
       return res.status(400).json({ message: 'Invalid payload: missing events array.' });
     }
 
-    const hasTabBlur = events.some(e => e.type === 'visibilitychange' && e.hidden);
+    const hasTabBlur = events.some(e => (e.type === 'visibilitychange' && (e.hidden || e.source)) || e.type === 'blur');
     if (events.length <= 10 && !hasTabBlur) {
       return res.status(200).json({ scored: false, reason: 'too_few_events' });
     }
@@ -187,43 +187,14 @@ const scoreWindow = async (req, res) => {
     // local, rule-based flags (paste / tab-switch) -- unrelated to the ML score
     const { explicitFlags } = extractFeatures(events);
 
-    // Format key events into the schema required by FastAPI (/verify & /enroll)
-    const formattedEvents = events
-      .filter(e => e.type === 'keydown' || e.type === 'keyup')
-      .map(e => ({
-        key: e.key,
-        type: e.type === 'keydown' ? 'down' : 'up',
-        t: e.timestamp
-      }));
-
-    // --- call the Behavioral Auth API with formatted events ---
-    let verifyResult = null;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
-    try {
-      const response = await fetch(`${BEHAVIOR_API_URL}/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: studentId.toString(), events: formattedEvents.length ? formattedEvents : events }),
-        signal: controller.signal
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`Behavior API returned ${response.status}: ${text}`);
-      }
-      verifyResult = await response.json();
-    } catch (error) {
-      const reason = error.name === 'AbortError' ? 'scorer_timeout' : 'scorer_unavailable';
-      console.error(`Behavior API call failed [${reason}]:`, error.message);
-      // Fallback: never block the exam. Just report unscored.
-      return res.status(200).json({ scored: false, reason });
-    } finally {
-      clearTimeout(timeoutId);
+    // Get or create session for student
+    let session = null;
+    if (examId) {
+      session = await BehaviorSession.findOne({ student: studentId, exam: examId });
     }
-
-    // Get or create session
-    let session = await BehaviorSession.findOne({ student: studentId, exam: examId });
+    if (!session) {
+      session = await BehaviorSession.findOne({ student: studentId }).sort({ updatedAt: -1 });
+    }
     if (!session) {
       session = new BehaviorSession({ student: studentId, exam: examId, smoothedScore: 0.0, history: [], totalWindowsScored: 0 });
     }
@@ -286,6 +257,58 @@ const scoreWindow = async (req, res) => {
 
     session.totalWindowsScored = (session.totalWindowsScored || 0) + 1;
     if (deviceInfo) session.deviceInfo = deviceInfo;
+
+    // Format key events into the schema required by FastAPI (/verify & /enroll)
+    const formattedEvents = events
+      .filter(e => e.type === 'keydown' || e.type === 'keyup')
+      .map(e => ({
+        key: e.key,
+        type: e.type === 'keydown' ? 'down' : 'up',
+        t: e.timestamp
+      }));
+
+    // --- call the Behavioral Auth API with formatted events ---
+    // FIX: previously fell back to the raw, unfiltered `events` array when
+    // formattedEvents was empty (e.g. a tab-switch-only send with zero
+    // actual keystrokes) -- that raw array contains mousemove/paste/
+    // visibilitychange events which fail the Python API's Pydantic schema
+    // (422 Unprocessable Entity) on nearly every request. We now just skip
+    // the ML call entirely when there's not enough keystroke data, rather
+    // than sending something guaranteed to fail. Local rule-based detection
+    // above (paste/tab-switch/device-change) already ran regardless, so
+    // this only affects the trust-score portion, not anomaly detection.
+    //
+    // ALSO FIXED: this whole block used to `return` early on API failure,
+    // which meant that whenever /verify failed (which was almost always,
+    // due to the bug above), the function exited BEFORE ever reaching the
+    // session/device/paste/tab-switch code that used to live below this
+    // block. That's the actual reason tab-switches were never counted --
+    // not a detection bug, but the detection code never running at all.
+    let verifyResult = null;
+    if (formattedEvents.length >= 6) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      try {
+        const response = await fetch(`${BEHAVIOR_API_URL}/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: studentId.toString(), events: formattedEvents }),
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(`Behavior API returned ${response.status}: ${text}`);
+        }
+        verifyResult = await response.json();
+      } catch (error) {
+        const reason = error.name === 'AbortError' ? 'scorer_timeout' : 'scorer_unavailable';
+        console.error(`Behavior API call failed [${reason}]:`, error.message);
+        verifyResult = null; // fall through to the isCollecting fallback below instead of returning early
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
 
     const isCollecting = !verifyResult || verifyResult.state === 'collecting';
     const rawScore = isCollecting ? 85.0 : (verifyResult.trust_score ?? verifyResult.rolling_avg_trust ?? 75);

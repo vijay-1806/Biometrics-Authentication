@@ -152,16 +152,13 @@ const broadcastLiveScore = (examId, studentId, data) => {
   const studentIdStr = String(studentId);
   for (const pin in sessions) {
     const session = sessions[pin];
-    const isStudentInSession = Object.values(session.students || {}).some(
-      s => String(s._id || s.id || '') === studentIdStr
-    );
-    if (isStudentInSession || !examId || String(session.examId) === String(examId)) {
+    if (session.teacherSocketId) {
       io.to(session.teacherSocketId).emit('live_score', {
         studentId: studentIdStr,
         ...data,
         timestamp: Date.now()
       });
-      console.log(`Broadcasted live_score to teacher for student ${studentIdStr}: tabBlurCount=${data.tabBlurCount}`);
+      console.log(`Broadcasted live_score to teacher (PIN ${pin}) for student ${studentIdStr}: tabBlurCount=${data.tabBlurCount}`);
     }
   }
 };
