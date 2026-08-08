@@ -16,7 +16,7 @@ const behaviorAlertSchema = new mongoose.Schema(
     },
     alertType: {
       type: String,
-      enum: ['behavioral_anomaly', 'paste_detected', 'device_change'],
+      enum: ['behavioral_anomaly', 'paste_detected', 'device_change', 'tab_switch'],
       default: 'behavioral_anomaly',
       required: true
     },

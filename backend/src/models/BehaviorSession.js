@@ -9,8 +9,8 @@ const behaviorSessionSchema = new mongoose.Schema(
     },
     exam: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Quiz', // Quizzes with isExam=true
-      required: true,
+      ref: 'Quiz',
+      required: false,
     },
     smoothedScore: {
       type: Number,
@@ -41,6 +41,14 @@ const behaviorSessionSchema = new mongoose.Schema(
     deviceChangeFlagged: {
       type: Boolean,
       default: false,
+    },
+    tabBlurCount: {
+      type: Number,
+      default: 0,
+    },
+    pasteCount: {
+      type: Number,
+      default: 0,
     }
   },
   {
