@@ -180,12 +180,16 @@ const scoreWindow = async (req, res) => {
     }
 
     const hasTabBlur = events.some(e => (e.type === 'visibilitychange' && (e.hidden || e.source)) || e.type === 'blur');
-    if (events.length <= 10 && !hasTabBlur) {
+    const hasPaste = events.some(e => e.type === 'paste');
+    console.log(`[scoreWindow] student=${studentId} events=${events.length} hasTabBlur=${hasTabBlur} hasPaste=${hasPaste}`);
+
+    if (events.length <= 10 && !hasTabBlur && !hasPaste) {
       return res.status(200).json({ scored: false, reason: 'too_few_events' });
     }
 
     // local, rule-based flags (paste / tab-switch) -- unrelated to the ML score
     const { explicitFlags } = extractFeatures(events);
+    console.log(`[scoreWindow] explicitFlags:`, explicitFlags);
 
     // Get or create session for student
     let session = null;
@@ -243,16 +247,17 @@ const scoreWindow = async (req, res) => {
     // Tab-switch detection
     if (explicitFlags.tabBlurCount > 0) {
       session.tabBlurCount = (session.tabBlurCount || 0) + explicitFlags.tabBlurCount;
-      const alert = await BehaviorAlert.create({
+      console.log(`[scoreWindow] TAB SWITCH detected! total=${session.tabBlurCount}`);
+      const tabAlert = await BehaviorAlert.create({
         student: studentId,
         exam: examId,
-        session: req.body.session || examId.toString(),
+        session: req.body.session || (examId ? examId.toString() : sessionId.current),
         alertType: 'tab_switch',
         topDeviatingFeatures: { tabBlurCount: explicitFlags.tabBlurCount },
         severity: 'low',
         reviewed: false
       });
-      broadcastAnomaly(examId, studentId, alert);
+      broadcastAnomaly(examId, studentId, tabAlert);
     }
 
     session.totalWindowsScored = (session.totalWindowsScored || 0) + 1;
