@@ -73,7 +73,7 @@ export default function LiveProctorDashboard() {
       socket.on('live_score', (data) => {
         setLiveScores(prev => ({
           ...prev,
-          [data.studentId]: data
+          [String(data.studentId)]: data
         }));
       });
 
@@ -96,16 +96,10 @@ export default function LiveProctorDashboard() {
     }
   };
 
-  const getReason = (alert) => {
-    if (alert.alertType === 'behavioral_anomaly') return "Typing rhythm or mouse kinetics deviated from historical baseline.";
-    if (alert.alertType === 'paste_detected') return `Student pasted ${alert.topDeviatingFeatures?.totalPastedChars || 'a block of'} characters.`;
-    if (alert.alertType === 'device_change') return "Student changed devices or resolution mid-exam.";
-    if (alert.alertType === 'tab_switch') return `Student switched away from exam tab (${alert.topDeviatingFeatures?.tabBlurCount || ''}x).`;
-    return "Unknown anomaly detected.";
-  };
-
   const getLiveScoreFor = (student) => {
-    return liveScores[student._id] || liveScores[student.id] || null;
+    if (!student) return null;
+    const idStr = String(student._id || student.id || '');
+    return liveScores[idStr] || liveScores[student._id] || liveScores[student.id] || null;
   };
 
   const getAlertCountForStudent = (studentId) => {
@@ -176,14 +170,6 @@ export default function LiveProctorDashboard() {
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">Real-time telemetry stream synchronized per 5-second sampling window</p>
             </div>
-
-            <button
-              onClick={() => setShowAlertDrawer(!showAlertDrawer)}
-              className="px-3.5 py-1.5 text-xs font-bold bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg transition-colors flex items-center gap-2"
-            >
-              <Bell className="w-4 h-4" />
-              <span>{showAlertDrawer ? 'Hide Anomaly Feed' : `Show Anomaly Feed (${liveAlerts.length})`}</span>
-            </button>
           </div>
 
           <div className="overflow-x-auto">
@@ -351,43 +337,6 @@ export default function LiveProctorDashboard() {
               </tbody>
             </table>
           </div>
-        </div>
-
-        {/* Collapsible Real-Time Anomaly Log Feed */}
-        {showAlertDrawer && (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md p-6 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
-              <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-rose-500" />
-                <span>Real-Time Anomaly Event Stream</span>
-              </h3>
-              <span className="text-xs text-slate-500 font-mono">{liveAlerts.length} Events Flagged</span>
-            </div>
-
-            <div className="max-h-60 overflow-y-auto space-y-3 pr-2">
-              {liveAlerts.length === 0 ? (
-                <p className="text-center text-slate-400 text-xs italic py-6">No security anomalies flagged yet for this session.</p>
-              ) : (
-                liveAlerts.map((alert, i) => (
-                  <div key={i} className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-rose-200 dark:border-rose-900/50 flex justify-between items-start gap-4">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 rounded-lg mt-0.5">
-                        <AlertCircle className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-900 dark:text-white text-xs">{alert.student?.name || 'Student Candidate'}</p>
-                        <p className="text-rose-600 dark:text-rose-300 text-xs mt-0.5 font-medium">{getReason(alert)}</p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-400 whitespace-nowrap">
-                      {new Date(alert.createdAt || Date.now()).toLocaleTimeString()}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
       </div>
     );
   }
