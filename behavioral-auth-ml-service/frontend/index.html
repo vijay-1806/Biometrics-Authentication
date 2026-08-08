@@ -1,0 +1,1776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Behavioral Auth — Training & Diagnostic Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-dark: #090d16;
+    --panel-bg: rgba(18, 26, 43, 0.75);
+    --panel-border: rgba(255, 255, 255, 0.08);
+    --panel-hover: rgba(255, 255, 255, 0.12);
+    
+    --primary: #00f2fe;
+    --primary-glow: rgba(0, 242, 254, 0.25);
+    --secondary: #6366f1;
+    --accent: #38bdf8;
+
+    --paper: #f1f5f9;
+    --dim: #94a3b8;
+    --subtle: #475569;
+    
+    --good: #10b981;
+    --good-glow: rgba(16, 185, 129, 0.2);
+    --warn: #f59e0b;
+    --warn-glow: rgba(245, 158, 11, 0.2);
+    --bad: #ef4444;
+    --bad-glow: rgba(239, 68, 68, 0.2);
+
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background-color: var(--bg-dark);
+    background-image: 
+      radial-gradient(at 10% 10%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+      radial-gradient(at 90% 90%, rgba(0, 242, 254, 0.1) 0px, transparent 50%);
+    background-attachment: fixed;
+    color: var(--paper);
+    font-family: var(--sans);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  /* Header */
+  header {
+    background: rgba(11, 15, 25, 0.85);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--panel-border);
+    padding: 16px 32px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .brand-icon {
+    width: 38px;
+    height: 38px;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 15px var(--primary-glow);
+  }
+
+  .brand-icon svg {
+    width: 22px;
+    height: 22px;
+    fill: #090d16;
+  }
+
+  .brand-text h1 {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .brand-text h1 span {
+    color: var(--primary);
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .brand-text p {
+    font-size: 12px;
+    color: var(--dim);
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .user-selector-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--panel-border);
+    padding: 6px 12px;
+    border-radius: 8px;
+    flex-wrap: wrap;
+  }
+
+  .user-action-buttons {
+    display: flex;
+    gap: 6px;
+  }
+
+  .user-inline-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+    border-radius: 6px;
+  }
+
+  .user-selector-group label {
+    font-size: 11px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    color: var(--dim);
+    letter-spacing: 0.5px;
+  }
+
+  .user-selector-group input {
+    background: transparent;
+    border: none;
+    color: var(--paper);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    width: 130px;
+    outline: none;
+  }
+
+  .user-selector-group select {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--panel-border);
+    color: var(--paper);
+    font-family: var(--mono);
+    font-size: 12px;
+    border-radius: 4px;
+    padding: 2px 6px;
+    outline: none;
+  }
+
+  .api-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--panel-border);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--dim);
+    transition: background 0.3s ease;
+  }
+
+  .status-dot.online {
+    background: var(--good);
+    box-shadow: 0 0 8px var(--good);
+  }
+
+  .status-dot.offline {
+    background: var(--bad);
+    box-shadow: 0 0 8px var(--bad);
+  }
+
+  /* Navigation Tabs */
+  .nav-bar {
+    background: rgba(18, 26, 43, 0.4);
+    border-bottom: 1px solid var(--panel-border);
+    padding: 0 32px;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+  }
+
+  .tab-btn {
+    padding: 14px 20px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--dim);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    font-family: var(--sans);
+    white-space: nowrap;
+  }
+
+  .tab-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+  }
+
+  .tab-btn:hover {
+    color: var(--paper);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    background: rgba(0, 242, 254, 0.05);
+  }
+
+  /* Main Container */
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px 80px;
+  }
+
+  .tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease forwards;
+  }
+
+  .tab-content.active {
+    display: block;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Cards & Layout */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 840px) {
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    backdrop-filter: blur(12px);
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    transition: border-color 0.2s ease;
+  }
+
+  .card:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .card-header h2 {
+    font-size: 15px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--dim);
+    font-family: var(--mono);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Typing Passage Box */
+  .passage-container {
+    background: rgba(10, 14, 23, 0.8);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 20px;
+    font-family: var(--mono);
+    font-size: 15px;
+    line-height: 1.8;
+    color: var(--subtle);
+    margin-bottom: 16px;
+    user-select: none;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4);
+    min-height: 90px;
+  }
+
+  .passage-container .typed { color: var(--paper); font-weight: 500; }
+  .passage-container .cursor { 
+    background: var(--primary); 
+    color: #000;
+    border-radius: 2px;
+    animation: pulseCursor 1s infinite alternate;
+  }
+  .passage-container .wrong { 
+    color: #fff;
+    background: var(--bad); 
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+
+  @keyframes pulseCursor {
+    from { opacity: 1; }
+    to { opacity: 0.4; }
+  }
+
+  /* Textarea Capture */
+  textarea.capture-box {
+    width: 100%;
+    min-height: 80px;
+    background: rgba(10, 14, 23, 0.9);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--paper);
+    resize: vertical;
+    outline: none;
+    transition: all 0.2s ease;
+  }
+
+  textarea.capture-box:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 12px var(--primary-glow);
+  }
+
+  textarea.capture-box:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* Live Stats Bar */
+  .live-stats {
+    display: flex;
+    gap: 16px;
+    margin: 12px 0 16px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--panel-border);
+  }
+
+  .live-stat-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+  }
+
+  .live-stat-item strong {
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  /* Rhythm Waveform Visualizer */
+  .rhythm-bar-container {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 36px;
+    margin-top: 12px;
+    padding: 4px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    overflow-x: auto;
+  }
+
+  .rhythm-bar {
+    width: 6px;
+    background: linear-gradient(to top, var(--secondary), var(--primary));
+    border-radius: 2px 2px 0 0;
+    transition: height 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  /* Buttons & Controls */
+  .btn-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 18px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    background: linear-gradient(135deg, var(--primary), #00c6ff);
+    color: #051320;
+    border: none;
+    padding: 11px 22px;
+    font-size: 13.5px;
+    font-weight: 700;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: var(--sans);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px var(--primary-glow);
+  }
+
+  .btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px var(--primary-glow);
+  }
+
+  .btn:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .btn-secondary {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--paper);
+    border: 1px solid var(--panel-border);
+    box-shadow: none;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+  }
+
+  .btn-good {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #fff;
+    box-shadow: 0 4px 14px var(--good-glow);
+  }
+
+  .btn-bad {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: #fff;
+    box-shadow: 0 4px 14px var(--bad-glow);
+  }
+
+  /* Metric Cards */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 16px;
+    margin-top: 14px;
+  }
+
+  .metric-box {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .metric-box .val {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--paper);
+    line-height: 1.1;
+  }
+
+  .metric-box .lbl {
+    font-size: 11.5px;
+    color: var(--dim);
+    margin-top: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Badges & Status Pills */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+
+  .badge.allow, .badge.low, .badge.full {
+    background: var(--good-glow);
+    color: var(--good);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .badge.step_up, .badge.medium, .badge.provisional {
+    background: var(--warn-glow);
+    color: var(--warn);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .badge.deny, .badge.high {
+    background: var(--bad-glow);
+    color: var(--bad);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  .badge.collecting, .badge.na {
+    background: rgba(148, 163, 184, 0.15);
+    color: var(--dim);
+    border: 1px solid var(--panel-border);
+  }
+
+  /* Radial Progress Ring & Bar */
+  .progress-bar-wrap {
+    height: 8px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-top: 12px;
+    border: 1px solid var(--panel-border);
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--secondary), var(--primary));
+    width: 0%;
+    transition: width 0.4s ease;
+  }
+
+  /* State Roadmap Steps */
+  .roadmap {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+    position: relative;
+  }
+
+  .roadmap::before {
+    content: '';
+    position: absolute;
+    top: 14px;
+    left: 20px;
+    right: 20px;
+    height: 2px;
+    background: var(--panel-border);
+    z-index: 1;
+  }
+
+  .step-node {
+    position: relative;
+    z-index: 2;
+    background: var(--bg-dark);
+    padding: 0 8px;
+    text-align: center;
+  }
+
+  .step-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid var(--panel-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    margin: 0 auto 6px;
+    color: var(--dim);
+  }
+
+  .step-node.active .step-circle {
+    border-color: var(--primary);
+    background: var(--primary-glow);
+    color: var(--primary);
+  }
+
+  .step-node.completed .step-circle {
+    border-color: var(--good);
+    background: var(--good);
+    color: #000;
+  }
+
+  .step-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--dim);
+  }
+
+  /* Table styling */
+  .custom-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 14px;
+  }
+
+  .custom-table th, .custom-table td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .custom-table th {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--dim);
+    letter-spacing: 0.5px;
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  .custom-table tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  /* Toast Notification */
+  #toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .toast {
+    background: rgba(18, 26, 43, 0.95);
+    border: 1px solid var(--panel-border);
+    backdrop-filter: blur(16px);
+    color: var(--paper);
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: toastIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.9); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .hint-text {
+    font-size: 12.5px;
+    color: var(--dim);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  /* Visual Score Gauge */
+  .score-gauge-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 16px 0;
+  }
+
+  .gauge-svg {
+    width: 160px;
+    height: 160px;
+  }
+
+  .gauge-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.05);
+    stroke-width: 12;
+  }
+
+  .gauge-fill {
+    fill: none;
+    stroke: url(#gauge-gradient);
+    stroke-width: 12;
+    stroke-linecap: round;
+    stroke-dasharray: 440;
+    stroke-dashoffset: 440;
+    transition: stroke-dashoffset 1s ease;
+  }
+
+  .gauge-text {
+    font-family: var(--mono);
+    font-size: 32px;
+    font-weight: 800;
+    fill: var(--paper);
+    text-anchor: middle;
+    dominant-baseline: central;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-icon">
+      <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-5.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8s0 0 0 0z"/></svg>
+    </div>
+    <div class="brand-text">
+      <h1>Behavioral Auth <span>// Phase 1 Engine</span></h1>
+      <p>Keystroke Dynamics Training, Verification & Adaptive Drift Diagnostic Console</p>
+    </div>
+  </div>
+
+  <div class="header-actions">
+    <div class="user-selector-group">
+      <label>Active User:</label>
+      <input type="text" id="global-user-id" value="vijay" placeholder="Enter user ID">
+      <div class="user-action-buttons">
+        <button class="btn btn-secondary user-inline-btn" id="apply-user-btn" type="button">Use User</button>
+        <button class="btn user-inline-btn" id="add-user-btn" type="button">Add &amp; Switch</button>
+      </div>
+      <select id="user-presets">
+        <option value="">Saved Users</option>
+        <option value="vijay">vijay</option>
+        <option value="student_riya">student_riya</option>
+        <option value="student_alex">student_alex</option>
+      </select>
+    </div>
+
+    <div class="api-badge" id="api-status-badge">
+      <div class="status-dot" id="api-status-dot"></div>
+      <span id="api-status-text">Connecting...</span>
+    </div>
+  </div>
+</header>
+
+<nav class="nav-bar">
+  <button class="tab-btn active" data-tab="overview">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    Dashboard Overview
+  </button>
+  <button class="tab-btn" data-tab="enroll">
+    <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    01. Enroll Samples
+  </button>
+  <button class="tab-btn" data-tab="verify">
+    <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+    02. Verify Authentication
+  </button>
+  <button class="tab-btn" data-tab="status">
+    <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+    03. Model Telemetry
+  </button>
+  <button class="tab-btn" data-tab="evaluation">
+    <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    04. Accuracy Evaluation
+  </button>
+</nav>
+
+<main>
+
+  <!-- OVERVIEW TAB -->
+  <section class="tab-content active" id="tab-overview">
+    <div class="card">
+      <div class="card-header">
+        <h2>Active Profile Summary: <span id="ov-user-name" style="color:var(--primary)">student_riya</span></h2>
+        <span class="badge" id="ov-badge-state">Checking...</span>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="val" id="ov-val-samples">0</div>
+          <div class="lbl">Enrollment Samples</div>
+        </div>
+        <div class="metric-box">
+          <div class="val" id="ov-val-state">—</div>
+          <div class="lbl">Model Stage</div>
+        </div>
+        <div class="metric-box">
+          <div class="val" id="ov-val-banked">0</div>
+          <div class="lbl">Banked Sessions</div>
+        </div>
+        <div class="metric-box">
+          <div class="val" id="ov-val-trained">—</div>
+          <div class="lbl">Baseline Sample #</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <h2>⚡ Workflow Quick Guide</h2>
+        </div>
+        <ol style="padding-left:20px; font-size:13.5px; color:var(--dim); line-height:1.8;">
+          <li><strong style="color:var(--paper)">Step 1 (Enrollment):</strong> Select a user ID and type the enrollment passage ~20 times to build a complete baseline profile.</li>
+          <li><strong style="color:var(--paper)">Step 2 (Verification):</strong> Switch to the <strong>Verify</strong> tab and type the verification passage as yourself to test genuine score (should ALLOW).</li>
+          <li><strong style="color:var(--paper)">Step 3 (Impostor Test):</strong> Have another user type the verify passage under your user ID to trigger STEP-UP / DENY.</li>
+          <li><strong style="color:var(--paper)">Step 4 (Adaptive Retrain):</strong> Bank 10 high-trust sessions and test shadow model retraining.</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>🎯 System Health & Parameters</h2>
+        </div>
+        <ul style="list-style:none; font-size:13px; font-family:var(--mono); color:var(--dim); line-height:2.0;">
+          <li>• Model Type: <span style="color:var(--paper)">IsolationForest (200 trees, 0.1 contamination)</span></li>
+          <li>• Cold Start Stages: <span style="color:var(--paper)">Collecting (0-9) → Provisional (10-19) → Full (20+)</span></li>
+          <li>• Decision Window: <span style="color:var(--paper)">5-sample rolling average (3 low scores = DENY)</span></li>
+          <li>• Feature Vector: <span style="color:var(--paper)">14-dim (Dwell, Flight, WPM, Backspace, 8 Digraphs)</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ENROLL TAB -->
+  <section class="tab-content" id="tab-enroll">
+    <div class="grid-2">
+      <!-- Left: Capture Box -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Keystroke Collector</h2>
+          <span style="font-size:11px; font-family:var(--mono); color:var(--primary)" id="enroll-wpm">0 WPM</span>
+        </div>
+
+        <div class="passage-container" id="enroll-passage">Loading passage...</div>
+
+        <textarea class="capture-box" id="enroll-input" placeholder="Click here and start typing the passage naturally..." disabled></textarea>
+
+        <div class="live-stats">
+          <div class="live-stat-item">Progress: <strong id="enroll-char-pct">0%</strong></div>
+          <div class="live-stat-item">Keys: <strong id="enroll-key-count">0</strong></div>
+          <div class="live-stat-item">Backspaces: <strong id="enroll-bs-count">0</strong></div>
+        </div>
+
+        <div style="font-size:11px; font-family:var(--mono); color:var(--dim); margin-top:6px;">Live Keystroke Dwell Timing Stream:</div>
+        <div class="rhythm-bar-container" id="enroll-rhythm"></div>
+
+        <div class="btn-row">
+          <button class="btn" id="enroll-submit-btn" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            Submit Sample (Ctrl+Enter)
+          </button>
+          <button class="btn btn-secondary" id="enroll-reset-btn">Reset Input</button>
+        </div>
+      </div>
+
+      <!-- Right: Progress Card -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Enrollment Progress</h2>
+          <span class="badge collecting" id="enroll-state-badge">Collecting</span>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <div class="val" id="enroll-count-val">0</div>
+            <div class="lbl">Samples Collected</div>
+          </div>
+          <div class="metric-box">
+            <div class="val" id="enroll-remaining-val">20</div>
+            <div class="lbl">Needed for Full</div>
+          </div>
+        </div>
+
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="enroll-progress-bar"></div>
+        </div>
+        <div class="hint-text" id="enroll-status-msg" style="margin-top:12px;">Type naturally at your own pace to build a realistic typing baseline.</div>
+
+        <div style="margin-top:28px;">
+          <div style="font-size:11px; font-family:var(--mono); text-transform:uppercase; color:var(--dim); margin-bottom:12px;">Model Progression Stages:</div>
+          <div class="roadmap">
+            <div class="step-node active" id="node-collecting">
+              <div class="step-circle">1</div>
+              <div class="step-label">Collecting<br>(0-9)</div>
+            </div>
+            <div class="step-node" id="node-provisional">
+              <div class="step-circle">2</div>
+              <div class="step-label">Provisional<br>(10-19)</div>
+            </div>
+            <div class="step-node" id="node-full">
+              <div class="step-circle">3</div>
+              <div class="step-label">Full Baseline<br>(20+)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- VERIFY TAB -->
+  <section class="tab-content" id="tab-verify">
+    <div class="grid-2">
+      <!-- Left: Verification Input -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Verification Sample</h2>
+          <span style="font-size:11px; font-family:var(--mono); color:var(--primary)" id="verify-wpm">0 WPM</span>
+        </div>
+
+        <div class="passage-container" id="verify-passage">Loading passage...</div>
+
+        <textarea class="capture-box" id="verify-input" placeholder="Click here and type verification passage..." disabled></textarea>
+
+        <div class="live-stats">
+          <div class="live-stat-item">Progress: <strong id="verify-char-pct">0%</strong></div>
+          <div class="live-stat-item">Events: <strong id="verify-key-count">0</strong></div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn" id="verify-submit-btn" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Verify Sample
+          </button>
+          <button class="btn btn-secondary" id="verify-reset-btn">Reset</button>
+        </div>
+      </div>
+
+      <!-- Right: Decision Results -->
+      <div class="card" id="verify-result-panel">
+        <div class="card-header">
+          <h2>Verification Score & Decision</h2>
+        </div>
+
+        <div class="score-gauge-wrap">
+          <svg class="gauge-svg" viewBox="0 0 160 160">
+            <defs>
+              <linearGradient id="gauge-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#00f2fe" />
+                <stop offset="100%" stop-color="#6366f1" />
+              </linearGradient>
+            </defs>
+            <circle class="gauge-bg" cx="80" cy="80" r="70" />
+            <circle class="gauge-fill" id="gauge-fill-circle" cx="80" cy="80" r="70" />
+            <text class="gauge-text" id="gauge-val-text" x="80" y="80">—</text>
+          </svg>
+          <div style="font-size:12px; font-family:var(--mono); color:var(--dim); margin-top:6px;">Trust Score (0–100)</div>
+        </div>
+
+        <div style="display:flex; justify-content:center; gap:12px; margin-bottom:16px;">
+          <span class="badge na" id="verify-risk-pill">Risk: N/A</span>
+          <span class="badge na" id="verify-action-pill">Action: Allow</span>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <div class="val" id="verify-rolling-val">—</div>
+            <div class="lbl">Rolling Avg (5)</div>
+          </div>
+          <div class="metric-box">
+            <div class="val" id="verify-conf-val">—</div>
+            <div class="lbl">Confidence %</div>
+          </div>
+        </div>
+
+        <div class="hint-text" id="verify-reason-text" style="text-align:center; margin-top:14px; color:var(--paper);">Run a verify sample to view decision rationale.</div>
+
+        <!-- Operator Ground Truth Logger -->
+        <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--panel-border);">
+          <div style="font-size:12px; font-family:var(--mono); color:var(--dim); margin-bottom:8px;">Log attempt for FRR/FAR evaluation:</div>
+          <div class="btn-row">
+            <button class="btn btn-good" id="log-genuine-btn" style="flex:1;">
+              ✓ Genuine User
+            </button>
+            <button class="btn btn-bad" id="log-impostor-btn" style="flex:1;">
+              ✕ Impostor
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Session Logs -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Verification Session Log</h2>
+      </div>
+      <table class="custom-table" id="verify-log-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>User</th>
+            <th>Trust Score</th>
+            <th>Rolling Avg</th>
+            <th>Action</th>
+            <th>Operator Label</th>
+          </tr>
+        </thead>
+        <tbody id="verify-log-body">
+          <tr><td colspan="6" style="color:var(--dim); text-align:center;">No verification attempts logged yet in this browser session.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+
+  <!-- STATUS & RETRAIN TAB -->
+  <section class="tab-content" id="tab-status">
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <h2>Model Telemetry</h2>
+          <button class="btn btn-secondary" id="status-refresh-btn" style="padding:6px 12px; font-size:12px;">Refresh</button>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <div class="val" id="st-samples">0</div>
+            <div class="lbl">Collected Samples</div>
+          </div>
+          <div class="metric-box">
+            <div class="val" id="st-state">—</div>
+            <div class="lbl">Stage</div>
+          </div>
+          <div class="metric-box">
+            <div class="val" id="st-banked">0</div>
+            <div class="lbl">Banked Trusted</div>
+          </div>
+          <div class="metric-box">
+            <div class="val" id="st-trained">—</div>
+            <div class="lbl">Baseline At</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Adaptive Shadow Retraining</h2>
+        </div>
+        <p style="font-size:13px; color:var(--dim); margin-bottom:14px; line-height:1.6;">
+          When <strong>10 trusted verify sessions</strong> (rolling avg ≥ 75) are banked, an adaptive retrain can fit a shadow model on combined baseline + new sessions. If drift &lt; 15, shadow is promoted.
+        </p>
+
+        <div class="btn-row">
+          <button class="btn" id="trigger-retrain-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Trigger Adaptive Retrain
+          </button>
+        </div>
+
+        <div style="margin-top:16px; display:none;" id="retrain-result-box" class="card">
+          <div style="font-size:12px; font-family:var(--mono); text-transform:uppercase; color:var(--primary);">Retrain Status Result:</div>
+          <div id="retrain-msg-text" style="font-size:13.5px; color:var(--paper); margin-top:6px; line-height:1.5;"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- EVALUATION TAB -->
+  <section class="tab-content" id="tab-evaluation">
+    <div class="card">
+      <div class="card-header">
+        <h2>Accuracy & Threshold Diagnostics (FRR vs FAR)</h2>
+        <button class="btn btn-secondary" id="eval-refresh-btn" style="padding:6px 12px; font-size:12px;">Refresh Evaluation</button>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="val" id="eval-total">0</div>
+          <div class="lbl">Labeled Attempts</div>
+        </div>
+        <div class="metric-box">
+          <div class="val" id="eval-genuine-cnt">0</div>
+          <div class="lbl">Genuine Samples</div>
+        </div>
+        <div class="metric-box">
+          <div class="val" id="eval-impostor-cnt">0</div>
+          <div class="lbl">Impostor Samples</div>
+        </div>
+        <div class="metric-box">
+          <div class="val" id="eval-best-thresh" style="color:var(--primary)">—</div>
+          <div class="lbl">Optimal Threshold</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <h2>Score Distribution Comparison</h2>
+        </div>
+        <div style="font-size:13px; color:var(--dim); margin-bottom:12px;">
+          Genuine Mean Score: <strong id="eval-gen-mean" style="color:var(--good)">—</strong> | 
+          Impostor Mean Score: <strong id="eval-imp-mean" style="color:var(--bad)">—</strong>
+        </div>
+        <div style="margin-top:16px;" id="score-dist-chart">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>FRR & FAR Threshold Analysis</h2>
+        </div>
+        <div style="max-height:260px; overflow-y:auto;">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>Threshold</th>
+                <th>FRR (False Reject)</th>
+                <th>FAR (False Accept)</th>
+              </tr>
+            </thead>
+            <tbody id="eval-thresh-body">
+              <tr><td colspan="3" style="color:var(--dim); text-align:center;">No evaluation data available.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- History Table -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Logged Verify History (`results.csv`)</h2>
+      </div>
+      <div style="max-height:300px; overflow-y:auto;">
+        <table class="custom-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>User ID</th>
+              <th>Attempt Label</th>
+              <th>Trust Score</th>
+            </tr>
+          </thead>
+          <tbody id="eval-history-body">
+            <tr><td colspan="4" style="color:var(--dim); text-align:center;">No logged attempts found.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast-container"></div>
+
+<script>
+const API = "http://localhost:8000";
+
+// State store
+const appState = {
+  userId: localStorage.getItem("auth_user_id") || "vijay",
+  lastVerifyScore: null,
+  verifyLogs: []
+};
+
+// DOM Elements
+const globalUserEl = document.getElementById("global-user-id");
+const presetSelect = document.getElementById("user-presets");
+const apiDot = document.getElementById("api-status-dot");
+const apiText = document.getElementById("api-status-text");
+
+// Sync User ID
+function normalizeUserId(value) {
+  return (value || "").trim() || "vijay";
+}
+
+function ensurePresetUser(userId) {
+  const value = normalizeUserId(userId);
+  if (!value) return;
+  const existing = Array.from(presetSelect.options).some(opt => opt.value === value);
+  if (!existing) {
+    const opt = new Option(value, value);
+    presetSelect.add(opt);
+  }
+  presetSelect.value = value;
+}
+
+function resetUserWorkspace() {
+  document.getElementById("enroll-count-val").textContent = "0";
+  document.getElementById("enroll-remaining-val").textContent = "20";
+  document.getElementById("enroll-progress-bar").style.width = "0%";
+  document.getElementById("enroll-status-msg").textContent = "Type naturally at your own pace to build a realistic typing baseline.";
+  document.getElementById("enroll-state-badge").textContent = "Collecting";
+  document.getElementById("enroll-state-badge").className = "badge collecting";
+  document.querySelectorAll(".step-node").forEach(node => node.classList.remove("active", "completed"));
+  document.getElementById("node-collecting").classList.add("active");
+
+  document.getElementById("gauge-fill-circle").style.strokeDashoffset = "440";
+  document.getElementById("gauge-val-text").textContent = "—";
+  document.getElementById("verify-risk-pill").textContent = "Risk: N/A";
+  document.getElementById("verify-risk-pill").className = "badge na";
+  document.getElementById("verify-action-pill").textContent = "Action: Allow";
+  document.getElementById("verify-action-pill").className = "badge allow";
+  document.getElementById("verify-rolling-val").textContent = "—";
+  document.getElementById("verify-conf-val").textContent = "—";
+  document.getElementById("verify-reason-text").textContent = "Run a verify sample to view decision rationale.";
+
+  const verifyLogBody = document.getElementById("verify-log-body");
+  verifyLogBody.innerHTML = '<tr><td colspan="6" style="color:var(--dim); text-align:center;">No verification attempts logged yet in this browser session.</td></tr>';
+
+  appState.lastVerifyScore = null;
+  loadPassages();
+}
+
+function switchUser(userId, { showToastMessage = false, addToPreset = true } = {}) {
+  const value = normalizeUserId(userId);
+  appState.userId = value;
+  globalUserEl.value = value;
+  localStorage.setItem("auth_user_id", value);
+  if (addToPreset) ensurePresetUser(value);
+  updateOverview();
+  updateStatus();
+  resetUserWorkspace();
+  if (showToastMessage) showToast(`Active user switched to ${value}`, "info");
+  return value;
+}
+
+globalUserEl.value = appState.userId;
+globalUserEl.addEventListener("input", e => {
+  appState.userId = normalizeUserId(e.target.value);
+  localStorage.setItem("auth_user_id", appState.userId);
+  updateOverview();
+  updateStatus();
+});
+
+globalUserEl.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    switchUser(appState.userId, { showToastMessage: true });
+  }
+});
+
+document.getElementById("apply-user-btn").onclick = () => {
+  switchUser(globalUserEl.value, { showToastMessage: true });
+};
+
+document.getElementById("add-user-btn").onclick = () => {
+  const value = switchUser(globalUserEl.value, { showToastMessage: false, addToPreset: true });
+  showToast(`User ${value} is ready to use.`, "success");
+};
+
+presetSelect.addEventListener("change", e => {
+  if (e.target.value) {
+    switchUser(e.target.value, { showToastMessage: false });
+  }
+});
+
+// Fetch existing users from backend & populate dropdown
+async function loadServerUsers() {
+  try {
+    const res = await fetch(API + "/users");
+    if (!res.ok) return;
+    const data = await res.json();
+    presetSelect.innerHTML = `<option value="">Saved Users</option>`;
+    ["vijay", "student_riya", "student_alex"].forEach(u => {
+      const opt = document.createElement("option");
+      opt.value = u;
+      opt.textContent = u;
+      presetSelect.appendChild(opt);
+    });
+    if (data.users && data.users.length > 0) {
+      data.users.forEach(u => {
+        const opt = document.createElement("option");
+        opt.value = u;
+        opt.textContent = u;
+        presetSelect.appendChild(opt);
+      });
+    }
+    ensurePresetUser(appState.userId);
+  } catch (e) {}
+}
+loadServerUsers();
+
+
+// Toast System
+function showToast(message, type = "info") {
+  const container = document.getElementById("toast-container");
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  let icon = "ℹ️";
+  if (type === "success") icon = "✅";
+  if (type === "error") icon = "❌";
+  if (type === "warning") icon = "⚠️";
+  
+  toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
+}
+
+// Navigation Tabs
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+    
+    btn.classList.add("active");
+    const targetTab = document.getElementById("tab-" + btn.dataset.tab);
+    if (targetTab) targetTab.classList.add("active");
+
+    if (btn.dataset.tab === "overview") updateOverview();
+    if (btn.dataset.tab === "status") updateStatus();
+    if (btn.dataset.tab === "evaluation") fetchEvaluation();
+  });
+});
+
+// Health check with latency ping
+async function checkApiHealth() {
+  const start = performance.now();
+  try {
+    const res = await fetch(API + "/");
+    const latency = Math.round(performance.now() - start);
+    if (res.ok) {
+      apiDot.className = "status-dot online";
+      apiText.textContent = `API Online (${latency}ms)`;
+    } else {
+      throw new Error();
+    }
+  } catch (err) {
+    apiDot.className = "status-dot offline";
+    apiText.textContent = "API Offline";
+  }
+}
+checkApiHealth();
+setInterval(checkApiHealth, 10000);
+
+// Shared Keystroke Capture Component
+function createCaptureController(passageId, inputId, submitBtnId, charPctId, keyCntId, rhythmId, wpmId) {
+  const passageEl = document.getElementById(passageId);
+  const inputEl = document.getElementById(inputId);
+  const submitBtn = document.getElementById(submitBtnId);
+  const charPctEl = document.getElementById(charPctId);
+  const keyCntEl = document.getElementById(keyCntId);
+  const rhythmEl = rhythmId ? document.getElementById(rhythmId) : null;
+  const wpmEl = wpmId ? document.getElementById(wpmId) : null;
+
+  const state = {
+    events: [],
+    startT: null,
+    passage: "",
+    lastKeyDown: {}
+  };
+
+  function render() {
+    const typed = inputEl.value;
+    let html = "";
+    for (let i = 0; i < state.passage.length; i++) {
+      const ch = state.passage[i];
+      if (i < typed.length) {
+        html += typed[i] === ch
+          ? `<span class="typed">${escapeHtml(ch)}</span>`
+          : `<span class="wrong">${escapeHtml(ch)}</span>`;
+      } else if (i === typed.length) {
+        html += `<span class="cursor">${escapeHtml(ch)}</span>`;
+      } else {
+        html += escapeHtml(ch);
+      }
+    }
+    passageEl.innerHTML = html;
+
+    const pct = Math.min(100, Math.round((typed.length / (state.passage.length || 1)) * 100));
+    if (charPctEl) charPctEl.textContent = pct + "%";
+    if (keyCntEl) keyCntEl.textContent = state.events.length;
+    submitBtn.disabled = typed.length < state.passage.length * 0.8;
+
+    // Calculate WPM
+    if (wpmEl && state.startT && typed.length > 5) {
+      const elapsedMins = (performance.now() - state.startT) / 60000;
+      const words = typed.length / 5;
+      const wpm = Math.round(words / Math.max(elapsedMins, 0.05));
+      wpmEl.textContent = `${wpm} WPM`;
+    }
+  }
+
+  function escapeHtml(c) {
+    if (c === " ") return "&nbsp;";
+    return c.replace(/[&<>]/g, s => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[s]));
+  }
+
+  function normalizeKey(k) {
+    if (k === " ") return "space";
+    if (k.length === 1) return k.toLowerCase();
+    return k;
+  }
+
+  inputEl.addEventListener("keydown", e => {
+    if (state.startT === null) state.startT = performance.now();
+    const key = normalizeKey(e.key);
+    const now = performance.now() - state.startT;
+    state.events.push({ key, type: "down", t: now });
+    state.lastKeyDown[key] = now;
+
+    // Trigger visual rhythm bar
+    if (rhythmEl) {
+      const bar = document.createElement("div");
+      bar.className = "rhythm-bar";
+      bar.style.height = "10px";
+      rhythmEl.appendChild(bar);
+      if (rhythmEl.children.length > 30) rhythmEl.removeChild(rhythmEl.children[0]);
+    }
+  });
+
+  inputEl.addEventListener("keyup", e => {
+    if (state.startT === null) return;
+    const key = normalizeKey(e.key);
+    const now = performance.now() - state.startT;
+    state.events.push({ key, type: "up", t: now });
+
+    // Update dwell duration on rhythm bar
+    if (rhythmEl && rhythmEl.lastElementChild && state.lastKeyDown[key]) {
+      const dwell = Math.min(100, Math.max(10, Math.round(now - state.lastKeyDown[key])));
+      rhythmEl.lastElementChild.style.height = `${Math.min(32, dwell / 4)}px`;
+    }
+  });
+
+  inputEl.addEventListener("input", render);
+
+  function reset(passageText) {
+    state.events = [];
+    state.startT = null;
+    state.passage = passageText;
+    state.lastKeyDown = {};
+    inputEl.value = "";
+    inputEl.disabled = false;
+    if (rhythmEl) rhythmEl.innerHTML = "";
+    if (wpmEl) wpmEl.textContent = "0 WPM";
+    render();
+  }
+
+  return { state, reset, render };
+}
+
+// Setup Controllers
+const enrollCap = createCaptureController("enroll-passage", "enroll-input", "enroll-submit-btn", "enroll-char-pct", "enroll-key-count", "enroll-rhythm", "enroll-wpm");
+const verifyCap = createCaptureController("verify-passage", "verify-input", "verify-submit-btn", "verify-char-pct", "verify-key-count", null, "verify-wpm");
+
+// Fetch Passages
+function loadPassages() {
+  fetch(API + "/passage/enroll").then(r => r.json()).then(d => enrollCap.reset(d.text)).catch(() => {});
+  fetch(API + "/passage/verify").then(r => r.json()).then(d => verifyCap.reset(d.text)).catch(() => {});
+}
+loadPassages();
+
+document.getElementById("enroll-reset-btn").onclick = () => {
+  fetch(API + "/passage/enroll").then(r => r.json()).then(d => enrollCap.reset(d.text));
+};
+document.getElementById("verify-reset-btn").onclick = () => {
+  fetch(API + "/passage/verify").then(r => r.json()).then(d => verifyCap.reset(d.text));
+};
+
+// Keyboard Shortcuts
+document.getElementById("enroll-input").addEventListener("keydown", e => {
+  if (e.ctrlKey && e.key === "Enter" && !document.getElementById("enroll-submit-btn").disabled) {
+    document.getElementById("enroll-submit-btn").click();
+  }
+});
+document.getElementById("verify-input").addEventListener("keydown", e => {
+  if (e.ctrlKey && e.key === "Enter" && !document.getElementById("verify-submit-btn").disabled) {
+    document.getElementById("verify-submit-btn").click();
+  }
+});
+
+// ENROLL SUBMIT
+document.getElementById("enroll-submit-btn").onclick = async () => {
+  const userId = appState.userId;
+  if (!userId) { showToast("Please specify a User ID", "warning"); return; }
+  
+  try {
+    const res = await fetch(API + "/enroll", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId, events: enrollCap.state.events })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Enrollment error");
+
+    showToast(`Sample #${data.samples_collected} saved for ${userId}!`, "success");
+    
+    // Update UI Cards
+    document.getElementById("enroll-count-val").textContent = data.samples_collected;
+    document.getElementById("enroll-remaining-val").textContent = Math.max(0, 20 - data.samples_collected);
+    
+    const badge = document.getElementById("enroll-state-badge");
+    badge.textContent = data.state;
+    badge.className = `badge ${data.state}`;
+    
+    const pct = Math.min(100, (data.samples_collected / 20) * 100);
+    document.getElementById("enroll-progress-bar").style.width = pct + "%";
+
+    // Roadmap update
+    document.querySelectorAll(".step-node").forEach(n => n.classList.remove("active", "completed"));
+    if (data.state === "collecting") {
+      document.getElementById("node-collecting").classList.add("active");
+    } else if (data.state === "provisional") {
+      document.getElementById("node-collecting").classList.add("completed");
+      document.getElementById("node-provisional").classList.add("active");
+    } else {
+      document.getElementById("node-collecting").classList.add("completed");
+      document.getElementById("node-provisional").classList.add("completed");
+      document.getElementById("node-full").classList.add("active", "completed");
+    }
+
+    let msg = "";
+    if (data.state === "collecting") msg = `${data.samples_to_provisional} more samples until provisional model activation.`;
+    else if (data.state === "provisional") msg = `Provisional model active. ${data.samples_to_full} more samples until full baseline model.`;
+    else msg = "Full model trained! You can continue adding enrollment samples to refine the baseline.";
+    document.getElementById("enroll-status-msg").textContent = msg;
+
+    // Reset capture input
+    fetch(API + "/passage/enroll").then(r => r.json()).then(d => enrollCap.reset(d.text));
+    updateOverview();
+  } catch (err) {
+    showToast(err.message, "error");
+  }
+};
+
+
+// VERIFY SUBMIT
+document.getElementById("verify-submit-btn").onclick = async () => {
+  const userId = appState.userId;
+  if (!userId) { showToast("Please specify a User ID", "warning"); return; }
+
+  try {
+    const res = await fetch(API + "/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId, events: verifyCap.state.events })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Verification error");
+
+    appState.lastVerifyScore = data.trust_score;
+
+    // Render Gauge
+    const score = data.trust_score !== null ? data.trust_score : 0;
+    const offset = 440 - (440 * score / 100);
+    document.getElementById("gauge-fill-circle").style.strokeDashoffset = offset;
+    document.getElementById("gauge-val-text").textContent = data.trust_score !== null ? score : "N/A";
+
+    // Update Pills
+    const riskPill = document.getElementById("verify-risk-pill");
+    riskPill.textContent = "Risk: " + (data.risk_level || "N/A");
+    riskPill.className = `badge ${(data.risk_level || "na").replace(" ", "_")}`;
+
+    const actionPill = document.getElementById("verify-action-pill");
+    actionPill.textContent = "Action: " + (data.action || "allow");
+    actionPill.className = `badge ${data.action || "allow"}`;
+
+    document.getElementById("verify-rolling-val").textContent = data.rolling_avg_trust ?? "—";
+    document.getElementById("verify-conf-val").textContent = data.confidence ? `${data.confidence}%` : "—";
+    document.getElementById("verify-reason-text").textContent = data.reason || "";
+
+    showToast(`Verification completed: ${data.action.toUpperCase()} (Score: ${data.trust_score})`, data.action === "deny" ? "error" : "success");
+
+    // Reset capture
+    fetch(API + "/passage/verify").then(r => r.json()).then(d => verifyCap.reset(d.text));
+  } catch (err) {
+    showToast(err.message, "error");
+  }
+};
+
+
+// LOG RESULT (GENUINE / IMPOSTOR)
+async function logAttempt(isGenuine) {
+  if (appState.lastVerifyScore === null) {
+    showToast("Run a verification attempt first before logging", "warning");
+    return;
+  }
+
+  try {
+    const res = await fetch(API + "/log_result", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: appState.userId,
+        is_genuine: isGenuine,
+        trust_score: appState.lastVerifyScore
+      })
+    });
+    if (!res.ok) throw new Error("Failed to log attempt");
+
+    showToast(`Logged attempt as ${isGenuine ? "GENUINE" : "IMPOSTOR"} in results.csv!`, "success");
+
+    // Add row to log table
+    const tableBody = document.getElementById("verify-log-body");
+    if (tableBody.children[0] && tableBody.children[0].cells.length === 1) {
+      tableBody.innerHTML = "";
+    }
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${new Date().toLocaleTimeString()}</td>
+      <td><strong>${appState.userId}</strong></td>
+      <td style="font-family:var(--mono); font-weight:700">${appState.lastVerifyScore}</td>
+      <td style="font-family:var(--mono)">${document.getElementById("verify-rolling-val").textContent}</td>
+      <td><span class="${document.getElementById("verify-action-pill").className}">${document.getElementById("verify-action-pill").textContent}</span></td>
+      <td><strong style="color:${isGenuine ? "var(--good)" : "var(--bad)"}">${isGenuine ? "Genuine" : "Impostor"}</strong></td>
+    `;
+    tableBody.prepend(tr);
+
+  } catch (err) {
+    showToast(err.message, "error");
+  }
+}
+document.getElementById("log-genuine-btn").onclick = () => logAttempt(true);
+document.getElementById("log-impostor-btn").onclick = () => logAttempt(false);
+
+
+// OVERVIEW UPDATE
+async function updateOverview() {
+  document.getElementById("ov-user-name").textContent = appState.userId;
+  try {
+    const res = await fetch(API + `/users/${encodeURIComponent(appState.userId)}/status`);
+    if (!res.ok) return;
+    const data = await res.json();
+    
+    document.getElementById("ov-val-samples").textContent = data.samples_collected;
+    document.getElementById("ov-val-state").textContent = data.state;
+    document.getElementById("ov-val-banked").textContent = data.trusted_sessions_banked;
+    document.getElementById("ov-val-trained").textContent = data.baseline_trained_at ?? "—";
+    
+    const badge = document.getElementById("ov-badge-state");
+    badge.textContent = data.state;
+    badge.className = `badge ${data.state}`;
+  } catch (err) {}
+}
+
+
+// STATUS & RETRAIN
+async function updateStatus() {
+  try {
+    const res = await fetch(API + `/users/${encodeURIComponent(appState.userId)}/status`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    document.getElementById("st-samples").textContent = data.samples_collected;
+    document.getElementById("st-state").textContent = data.state;
+    document.getElementById("st-banked").textContent = data.trusted_sessions_banked;
+    document.getElementById("st-trained").textContent = data.baseline_trained_at ?? "—";
+  } catch (err) {}
+}
+document.getElementById("status-refresh-btn").onclick = updateStatus;
+
+document.getElementById("trigger-retrain-btn").onclick = async () => {
+  try {
+    const res = await fetch(API + `/users/${encodeURIComponent(appState.userId)}/retrain`, { method: "POST" });
+    const data = await res.json();
+    
+    const box = document.getElementById("retrain-result-box");
+    box.style.display = "block";
+    document.getElementById("retrain-msg-text").textContent = 
+      `Retrain Status: ${data.retrained ? "PROMOTED" : "DISCARDED"}. ${data.reason || ""} ${data.drift_score !== undefined ? "(Drift Score: " + data.drift_score + ")" : ""}`;
+      
+    showToast(data.retrained ? "Shadow model promoted!" : "Shadow model discarded due to drift", data.retrained ? "success" : "warning");
+    updateStatus();
+  } catch (err) {
+    showToast("Failed to trigger retrain", "error");
+  }
+};
+
+
+// EVALUATION TAB
+async function fetchEvaluation() {
+  try {
+    const res = await fetch(API + "/evaluation");
+    const data = await res.json();
+    if (!data.has_data) {
+      showToast("No logged results in results.csv yet", "info");
+      return;
+    }
+
+    document.getElementById("eval-total").textContent = data.total_attempts;
+    document.getElementById("eval-genuine-cnt").textContent = data.genuine_count;
+    document.getElementById("eval-impostor-cnt").textContent = data.impostor_count;
+    document.getElementById("eval-best-thresh").textContent = data.best_threshold;
+    document.getElementById("eval-gen-mean").textContent = data.genuine_mean;
+    document.getElementById("eval-imp-mean").textContent = data.impostor_mean;
+
+    // Render Threshold Table
+    const threshBody = document.getElementById("eval-thresh-body");
+    threshBody.innerHTML = "";
+    data.thresholds.forEach(item => {
+      const tr = document.createElement("tr");
+      const isBest = item.threshold === data.best_threshold;
+      if (isBest) tr.style.background = "rgba(0, 242, 254, 0.1)";
+      tr.innerHTML = `
+        <td><strong style="font-family:var(--mono)">${item.threshold}</strong> ${isBest ? "⭐ (Best)" : ""}</td>
+        <td style="color:var(--bad)">${item.frr}%</td>
+        <td style="color:var(--warn)">${item.far}%</td>
+      `;
+      threshBody.appendChild(tr);
+    });
+
+    // Render History Table
+    const histBody = document.getElementById("eval-history-body");
+    histBody.innerHTML = "";
+    data.rows.forEach((row, idx) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${idx + 1}</td>
+        <td><strong>${row.user_id}</strong></td>
+        <td><span class="badge ${row.is_genuine ? "allow" : "deny"}">${row.is_genuine ? "Genuine" : "Impostor"}</span></td>
+        <td style="font-family:var(--mono); font-weight:700">${row.trust_score}</td>
+      `;
+      histBody.appendChild(tr);
+    });
+
+    // Render Score Dist visual
+    const chartBox = document.getElementById("score-dist-chart");
+    chartBox.innerHTML = `
+      <div style="margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+          <span>Genuine Mean Score</span>
+          <span style="color:var(--good); font-weight:700">${data.genuine_mean} / 100</span>
+        </div>
+        <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${data.genuine_mean}%; background:var(--good);"></div></div>
+      </div>
+      <div>
+        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+          <span>Impostor Mean Score</span>
+          <span style="color:var(--bad); font-weight:700">${data.impostor_mean} / 100</span>
+        </div>
+        <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${data.impostor_mean}%; background:var(--bad);"></div></div>
+      </div>
+    `;
+
+  } catch (err) {
+    showToast("Failed to fetch evaluation diagnostics", "error");
+  }
+}
+document.getElementById("eval-refresh-btn").onclick = fetchEvaluation;
+
+// Initial sync
+updateOverview();
+</script>
+
+</body>
+</html>

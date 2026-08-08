@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import useBehaviorTracking from '../hooks/useBehaviorTracking';
 import Layout from '../components/Common/Layout';
 import { 
   BookOpen, 
@@ -19,6 +20,9 @@ const CourseDetails = () => {
   const { id } = useParams();
   const { user } = useAuth();
   
+  // Continuous authentication behavior telemetry
+  useBehaviorTracking('general');
+
   const [course, setCourse] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [quizzes, setQuizzes] = useState([]);

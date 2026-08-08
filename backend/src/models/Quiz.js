@@ -20,6 +20,10 @@ const quizSchema = new mongoose.Schema(
       type: Number,
       default: 30,
     },
+    isExam: {
+      type: Boolean,
+      default: false,
+    },
     questions: [
       {
         questionText: {

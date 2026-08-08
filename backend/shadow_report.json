@@ -1,0 +1,29 @@
+{
+  "metadata": {
+    "generatedAt": "2026-08-01T11:32:40.817Z",
+    "totalSessionsScored": 3,
+    "totalWindowsScored": 0,
+    "totalAlerts": 2
+  },
+  "metrics": {
+    "sessionLevelFRR": "66.67%",
+    "windowLevelAlertRate": "0.00%"
+  },
+  "highAlertOutliers": [],
+  "featureHistogram": {
+    "mouseSpeedMean": 1,
+    "typingSpeed": 1,
+    "flightTimeMean": 1
+  },
+  "perStudentModelQuality": [
+    {
+      "student": "studentA@gmail.com",
+      "baselineNormalRate": "N/A"
+    },
+    {
+      "student": "studentB@gmail.com",
+      "baselineNormalRate": "N/A"
+    }
+  ],
+  "replayRegressionCheck": "PASS (Alert Triggered)"
+}

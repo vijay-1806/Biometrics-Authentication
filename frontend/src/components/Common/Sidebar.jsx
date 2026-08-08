@@ -11,7 +11,8 @@ import {
   FileCode,
   HelpCircle,
   Users,
-  Award
+  Award,
+  ShieldAlert
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -33,11 +34,13 @@ const Sidebar = () => {
     const teacherLinks = [
       { path: '/dashboard', name: 'Teacher Panel', icon: LayoutDashboard },
       { path: '/courses', name: 'My Courses', icon: BookOpen },
+      { path: '/admin/behavior', name: 'Security Alerts', icon: ShieldAlert },
     ];
 
     const adminLinks = [
       { path: '/dashboard', name: 'Admin Control', icon: LayoutDashboard },
       { path: '/courses', name: 'Manage Courses', icon: BookOpen },
+      { path: '/admin/behavior', name: 'Security Alerts', icon: ShieldAlert },
     ];
 
     let roleLinks = [];

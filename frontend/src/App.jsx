@@ -8,6 +8,7 @@ import CourseDetails from './pages/CourseDetails';
 import CodingPractice from './pages/CodingPractice';
 import QuizPage from './pages/QuizPage';
 import Profile from './pages/Profile';
+import LiveProctorDashboard from './pages/LiveProctorDashboard';
 
 // Route protection wrapper
 const ProtectedRoute = ({ children }) => {
@@ -76,6 +77,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          
+          <Route
+            path="/admin/behavior"
+            element={
+              <ProtectedRoute>
+                <LiveProctorDashboard />
               </ProtectedRoute>
             }
           />

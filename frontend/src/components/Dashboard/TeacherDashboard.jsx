@@ -8,10 +8,10 @@ import {
   HelpCircle, 
   Users, 
   FolderPlus, 
-  CheckCircle,
   Eye,
   AlertCircle,
-  Award
+  Award,
+  Trash2
 } from 'lucide-react';
 
 const TeacherDashboard = () => {
@@ -21,10 +21,10 @@ const TeacherDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('courses');
 
-  // Modal / Form state
   const [showCourseForm, setShowCourseForm] = useState(false);
   const [showAssignmentForm, setShowAssignmentForm] = useState(false);
   const [showQuizForm, setShowQuizForm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null); // stores course._id
 
   // Form inputs
   const [courseTitle, setCourseTitle] = useState('');
@@ -118,7 +118,10 @@ const TeacherDashboard = () => {
     }
 
     try {
-      await axios.post('/api/courses', { title: courseTitle, description: courseDesc });
+      // NOTE: token should normally be passed via axios interceptor, but we'll include it here just in case if the setup isn't global
+      await axios.post('/api/courses', { title: courseTitle, description: courseDesc }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
       setMessage('Course created successfully!');
       setCourseTitle('');
       setCourseDesc('');
@@ -127,6 +130,21 @@ const TeacherDashboard = () => {
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create course');
+    }
+  };
+
+  const handleDeleteCourse = async () => {
+    if (!showDeleteConfirm) return;
+    try {
+      await axios.delete(`/api/courses/${showDeleteConfirm}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      setMessage('Course and all associated data deleted successfully!');
+      setShowDeleteConfirm(null);
+      fetchTeacherData();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to delete course');
     }
   };
 
@@ -373,12 +391,21 @@ const TeacherDashboard = () => {
                       <Users size={14} />
                       {c.studentsEnrolled?.length || 0} Students
                     </span>
-                    <Link 
-                      to={`/courses/${c._id}`} 
-                      className="text-brand-600 dark:text-brand-400 hover:underline font-bold"
-                    >
-                      View Classroom &rarr;
-                    </Link>
+                    <div className="flex items-center gap-4">
+                      <button 
+                        onClick={() => setShowDeleteConfirm(c._id)}
+                        className="text-rose-500 hover:text-rose-700 flex items-center gap-1 font-bold"
+                      >
+                        <Trash2 size={14} />
+                        Delete
+                      </button>
+                      <Link 
+                        to={`/courses/${c._id}`} 
+                        className="text-brand-600 dark:text-brand-400 hover:underline font-bold"
+                      >
+                        View Classroom &rarr;
+                      </Link>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -511,7 +538,7 @@ const TeacherDashboard = () => {
                   value={courseTitle}
                   onChange={(e) => setCourseTitle(e.target.value)}
                   placeholder="Introduction to Programming"
-                  className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-250 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
                 />
               </div>
               <div className="space-y-1">
@@ -522,7 +549,7 @@ const TeacherDashboard = () => {
                   value={courseDesc}
                   onChange={(e) => setCourseDesc(e.target.value)}
                   placeholder="Provide an overview of the curriculum and learning goals..."
-                  className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-250 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
                 />
               </div>
               <div className="flex justify-end gap-3 pt-2">
@@ -563,7 +590,7 @@ const TeacherDashboard = () => {
                   <select
                     value={selectedCourseId}
                     onChange={(e) => setSelectedCourseId(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-250 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
                   >
                     {courses.map(c => <option key={c._id} value={c._id}>{c.title}</option>)}
                   </select>
@@ -573,7 +600,7 @@ const TeacherDashboard = () => {
                   <select
                     value={language}
                     onChange={(e) => setLanguage(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-250 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
                   >
                     <option value="javascript">JavaScript (Node VM)</option>
                     <option value="python">Python</option>
@@ -589,7 +616,7 @@ const TeacherDashboard = () => {
                   value={assignmentTitle}
                   onChange={(e) => setAssignmentTitle(e.target.value)}
                   placeholder="Sum two numbers"
-                  className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-250 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
                 />
               </div>
 
@@ -601,7 +628,7 @@ const TeacherDashboard = () => {
                   value={assignmentDesc}
                   onChange={(e) => setAssignmentDesc(e.target.value)}
                   placeholder="Write a solution that sums two inputs..."
-                  className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-250 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
                 />
               </div>
 
@@ -637,7 +664,7 @@ const TeacherDashboard = () => {
                         value={tc.input}
                         onChange={(e) => updateTestCase(idx, 'input', e.target.value)}
                         placeholder="Args: 5, 10"
-                        className="flex-1 bg-slate-50 dark:bg-slate-850 border border-slate-250 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none dark:text-white"
+                        className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none dark:text-white"
                       />
                       <input
                         type="text"
@@ -645,7 +672,7 @@ const TeacherDashboard = () => {
                         value={tc.expectedOutput}
                         onChange={(e) => updateTestCase(idx, 'expectedOutput', e.target.value)}
                         placeholder="Expected Return: 15"
-                        className="flex-1 bg-slate-50 dark:bg-slate-850 border border-slate-250 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none dark:text-white"
+                        className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none dark:text-white"
                       />
                       {testCases.length > 1 && (
                         <button
@@ -699,7 +726,7 @@ const TeacherDashboard = () => {
                   <select
                     value={selectedCourseId}
                     onChange={(e) => setSelectedCourseId(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-250 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
                   >
                     {courses.map(c => <option key={c._id} value={c._id}>{c.title}</option>)}
                   </select>
@@ -711,7 +738,7 @@ const TeacherDashboard = () => {
                     required
                     value={duration}
                     onChange={(e) => setDuration(Number(e.target.value))}
-                    className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-250 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
                   />
                 </div>
               </div>
@@ -724,7 +751,7 @@ const TeacherDashboard = () => {
                   value={quizTitle}
                   onChange={(e) => setQuizTitle(e.target.value)}
                   placeholder="Midterm Quiz"
-                  className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-250 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
                 />
               </div>
 
@@ -736,7 +763,7 @@ const TeacherDashboard = () => {
                   value={quizDesc}
                   onChange={(e) => setQuizDesc(e.target.value)}
                   placeholder="No calculators allowed..."
-                  className="w-full bg-slate-50 dark:bg-slate-850 border border-slate-250 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-white"
                 />
               </div>
 
@@ -820,7 +847,7 @@ const TeacherDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-amber-650 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold"
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold"
                 >
                   Publish Quiz
                 </button>
@@ -830,6 +857,34 @@ const TeacherDashboard = () => {
         </div>
       )}
 
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 max-w-sm w-full rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 text-center space-y-4">
+            <div className="w-16 h-16 bg-rose-100 dark:bg-rose-900/30 text-rose-600 mx-auto rounded-full flex items-center justify-center mb-2">
+              <AlertCircle size={32} />
+            </div>
+            <h3 className="text-xl font-black text-slate-900 dark:text-white">Delete Course?</h3>
+            <p className="text-slate-500 text-sm">
+              This action cannot be undone. This will permanently delete the course, all associated quizzes, coding assignments, and student submissions.
+            </p>
+            <div className="flex gap-3 pt-4">
+              <button
+                onClick={() => setShowDeleteConfirm(null)}
+                className="flex-1 px-4 py-3 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteCourse}
+                className="flex-1 px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-rose-500/30"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

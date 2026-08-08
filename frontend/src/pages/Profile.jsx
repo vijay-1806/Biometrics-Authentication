@@ -1,11 +1,34 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Common/Layout';
-import { User, Mail, Calendar, Shield, ArrowLeft } from 'lucide-react';
+import { User, Mail, Calendar, Shield, ArrowLeft, Fingerprint, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
+import BiometricEnrollmentModal from '../components/BiometricEnrollmentModal';
 
 const Profile = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const [bioStatus, setBioStatus] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (user && token) {
+      axios.get('/api/behavior/status', { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => setBioStatus(res.data))
+        .catch(err => console.error('Failed to load biometric status:', err));
+    }
+  }, [user, token]);
+
+  const getStatusBadge = () => {
+    const state = bioStatus?.state || 'collecting';
+    if (state === 'full') {
+      return <span className="px-2.5 py-1 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-bold rounded-full border border-emerald-200 dark:border-emerald-800">Fully Trained (Isolation Forest)</span>;
+    }
+    if (state === 'provisional') {
+      return <span className="px-2.5 py-1 bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-xs font-bold rounded-full border border-amber-200 dark:border-amber-800">Provisional Model ({bioStatus?.samples_collected || 10}/20)</span>;
+    }
+    return <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold rounded-full border border-slate-200 dark:border-slate-700">Collecting ({bioStatus?.samples_collected || 0}/10 samples)</span>;
+  };
 
   return (
     <Layout>
@@ -80,12 +103,42 @@ const Profile = () => {
               )}
             </div>
 
+            {/* Biometrics Card */}
+            <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-5 rounded-xl border border-slate-700 shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mt-6">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <Fingerprint className="w-5 h-5 text-brand-400" />
+                  <span className="font-bold text-sm">Behavioral Biometrics Profile</span>
+                </div>
+                <div className="pt-1">
+                  {getStatusBadge()}
+                </div>
+                <p className="text-xs text-slate-300 mt-1">
+                  Enrolling your typing baseline ensures real-time trust scoring during proctored coding assessments.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap shadow-lg"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Train Biometrics</span>
+              </button>
+            </div>
+
             <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl text-xs text-slate-500 border border-slate-100 dark:border-slate-800/60 mt-4">
-              <strong>Demo Note:</strong> This application serves as a client simulation client for biometric telemetry security platform SDK integrations. Events such as page navigation, editing, and form submission track metrics for profiling.
+              <strong>Security Note:</strong> Behavioral biometrics monitor keystroke timing and mouse kinetics during proctored exams to verify your authentic identity without requiring invasive video surveillance.
             </div>
 
           </div>
         </div>
+
+        {/* Enrollment Modal */}
+        <BiometricEnrollmentModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onStatusUpdate={(newStatus) => setBioStatus(newStatus)}
+        />
 
       </div>
     </Layout>

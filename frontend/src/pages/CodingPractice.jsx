@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { io } from 'socket.io-client';
 import Editor from '@monaco-editor/react';
 import { useAuth } from '../context/AuthContext';
+import useBehaviorTracking from '../hooks/useBehaviorTracking';
 import Layout from '../components/Common/Layout';
 import { 
   Play, 
@@ -13,13 +15,24 @@ import {
   XCircle, 
   Info,
   History,
-  FileCode
+  FileCode,
+  Timer
 } from 'lucide-react';
 
 const CodingPractice = () => {
   const { id } = useParams();
-  const { theme } = useAuth();
+  const { user, theme } = useAuth();
   const navigate = useNavigate();
+
+  // Socket session state (PIN prompt required to join teacher session)
+  const [inSession, setInSession] = useState(false);
+  const [waitingForStart, setWaitingForStart] = useState(false);
+  const [sessionPinInput, setSessionPinInput] = useState('');
+  const [sessionError, setSessionError] = useState('');
+  const socketRef = useRef(null);
+
+  // Continuous authentication behavior telemetry
+  useBehaviorTracking('exam', id);
 
   const [assignment, setAssignment] = useState(null);
   const [code, setCode] = useState('');
@@ -60,7 +73,44 @@ const CodingPractice = () => {
 
   useEffect(() => {
     fetchAssignmentData();
+    return () => {
+      if (socketRef.current) socketRef.current.disconnect();
+    };
   }, [id]);
+
+  const handleJoinSession = () => {
+    if (!sessionPinInput) return;
+    setSessionError('');
+    
+    socketRef.current = io('http://localhost:5000', { transports: ['websocket', 'polling'] });
+    const socket = socketRef.current;
+    
+    socket.emit('join-session', { pin: sessionPinInput, student: { id: user._id, name: user.name, email: user.email } });
+    
+    socket.on('join-success', () => {
+      setInSession(true);
+      setWaitingForStart(true);
+    });
+    
+    socket.on('exam-started', () => {
+      setInSession(true);
+      setWaitingForStart(false);
+    });
+    
+    socket.on('join-error', (msg) => {
+      setSessionError(msg);
+      socket.disconnect();
+    });
+    
+    socket.on('session-ended', () => {
+      navigate(`/courses/${assignment?.course}`);
+    });
+  };
+
+  const handleBypassSession = () => {
+    setInSession(true);
+    setWaitingForStart(false);
+  };
 
   const handleRunCode = async () => {
     if (!code) return;
@@ -114,6 +164,72 @@ const CodingPractice = () => {
       <Layout>
         <div className="flex justify-center items-center h-96">
           <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Pre-assignment Waiting Room
+  if (!inSession || waitingForStart) {
+    return (
+      <Layout>
+        <div className="max-w-md mx-auto mt-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center shadow-xl space-y-4">
+          <div className="w-16 h-16 bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 rounded-full flex items-center justify-center mx-auto mb-2">
+            <Timer size={32} />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Live Exam Lobby</h2>
+          
+          {!inSession ? (
+            <>
+              <p className="text-slate-500 text-sm">Enter the 6-digit PIN generated on the Teacher Proctor Dashboard to join.</p>
+              <input
+                type="text"
+                placeholder="000000"
+                maxLength={6}
+                value={sessionPinInput}
+                onChange={e => setSessionPinInput(e.target.value)}
+                className="w-full text-center text-3xl tracking-widest font-mono p-4 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-brand-500 outline-none"
+              />
+              {sessionError && <p className="text-rose-500 text-sm font-medium">{sessionError}</p>}
+              
+              <button
+                onClick={handleJoinSession}
+                className="w-full py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all shadow-md"
+              >
+                Join Proctor Session
+              </button>
+
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  onClick={handleBypassSession}
+                  className="text-xs text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 font-semibold underline"
+                >
+                  Or enter Direct Practice Mode (Skip PIN requirement)
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs font-bold">
+                ✓ Successfully joined room #{sessionPinInput}!
+              </div>
+              <p className="text-slate-500 text-sm">
+                Waiting for teacher to click <strong>"Start Assessment"</strong> on the Proctor Control Room.
+              </p>
+              <div className="flex justify-center gap-2 py-4">
+                <div className="w-3 h-3 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-3 h-3 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-3 h-3 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
+              
+              <button
+                onClick={handleBypassSession}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-lg"
+              >
+                Start Coding Now (Skip Waiting)
+              </button>
+            </>
+          )}
         </div>
       </Layout>
     );

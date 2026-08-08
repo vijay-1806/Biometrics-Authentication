@@ -3,6 +3,8 @@ const Assignment = require('../models/Assignment');
 const Quiz = require('../models/Quiz');
 const Submission = require('../models/Submission');
 const Result = require('../models/Result');
+const BehaviorAlert = require('../models/BehaviorAlert');
+const BehaviorSession = require('../models/BehaviorSession');
 
 // @desc    Get all courses
 // @route   GET /api/courses
@@ -144,9 +146,52 @@ const enrollInCourse = async (req, res) => {
   }
 };
 
+// @desc    Delete a course
+// @route   DELETE /api/courses/:id
+// @access  Private (Teacher or Admin)
+const deleteCourse = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id);
+
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    // Check if the user is the teacher of this course or an admin
+    if (course.teacher.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Not authorized to delete this course' });
+    }
+
+    // Find all assignments and quizzes associated with this course
+    const assignments = await Assignment.find({ course: course._id });
+    const assignmentIds = assignments.map(a => a._id);
+
+    const quizzes = await Quiz.find({ course: course._id });
+    const quizIds = quizzes.map(q => q._id);
+
+    // Cascading deletes
+    await Submission.deleteMany({ assignment: { $in: assignmentIds } });
+    await Assignment.deleteMany({ course: course._id });
+
+    await Result.deleteMany({ quiz: { $in: quizIds } });
+    await BehaviorAlert.deleteMany({ exam: { $in: quizIds } });
+    await BehaviorSession.deleteMany({ exam: { $in: quizIds } });
+    await Quiz.deleteMany({ course: course._id });
+
+    // Delete the course itself
+    await Course.findByIdAndDelete(course._id);
+
+    res.json({ message: 'Course and all associated data deleted successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   getCourses,
   getCourseById,
   createCourse,
   enrollInCourse,
+  deleteCourse,
 };

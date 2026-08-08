@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
+import useBehaviorTracking from '../hooks/useBehaviorTracking';
 import Layout from '../components/Common/Layout';
 import { 
   Timer, 
@@ -20,10 +22,27 @@ const QuizPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-
+  
   const [quiz, setQuiz] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Live Session State
+  const [inSession, setInSession] = useState(false);
+  const [sessionPinInput, setSessionPinInput] = useState('');
+  const [waitingForStart, setWaitingForStart] = useState(false);
+  const [sessionError, setSessionError] = useState('');
+  const socketRef = useRef(null);
+
+  // Continuous authentication behavior telemetry.
+  // IMPORTANT: this was previously `quiz?.isExam ? 'exam' : 'quiz'` -- since
+  // most quiz documents don't have isExam set, that meant real-time scoring
+  // (and the live_score broadcast to the teacher's proctoring dashboard)
+  // never fired at all, for any quiz, regardless of whether it was being
+  // live-monitored. The thing that actually matters is whether the student
+  // is in an active live-proctored session (inSession), so drive it off that.
+  const trackingContext = (inSession || quiz?.isExam) ? 'exam' : 'quiz';
+  useBehaviorTracking(trackingContext, id);
   
   // Quiz taking state
   const [selectedAnswers, setSelectedAnswers] = useState({}); // { questionIndex: selectedOptionIndex }
@@ -59,8 +78,39 @@ const QuizPage = () => {
     fetchQuizData();
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (socketRef.current) socketRef.current.disconnect();
     };
   }, [id]);
+
+  const handleJoinSession = () => {
+    if (!sessionPinInput) return;
+    setSessionError('');
+    
+    socketRef.current = io('http://localhost:5000', { transports: ['websocket'] });
+    const socket = socketRef.current;
+    
+    socket.emit('join-session', { pin: sessionPinInput, student: { id: user._id, name: user.name, email: user.email } });
+    
+    socket.on('join-success', () => {
+      setInSession(true);
+      setWaitingForStart(true);
+    });
+    
+    socket.on('exam-started', () => {
+      setInSession(true);
+      setWaitingForStart(false);
+    });
+    
+    socket.on('join-error', (msg) => {
+      setSessionError(msg);
+      socket.disconnect();
+    });
+    
+    socket.on('session-ended', () => {
+      // Force submit if teacher ends session
+      handleAutoSubmit();
+    });
+  };
 
   // Timer loop
   useEffect(() => {
@@ -151,6 +201,50 @@ const QuizPage = () => {
       <Layout>
         <div className="flex justify-center items-center h-96">
           <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Pre-quiz Waiting Room (if it's an exam, require live session)
+  if (quiz?.isExam && (!inSession || waitingForStart)) {
+    return (
+      <Layout>
+        <div className="max-w-md mx-auto mt-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center shadow-xl">
+          <div className="w-16 h-16 bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Timer size={32} />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Live Exam Lobby</h2>
+          
+          {!inSession ? (
+            <>
+              <p className="text-slate-500 mb-6">Enter the 6-digit PIN provided by your teacher to join the secure exam session.</p>
+              <input
+                type="text"
+                placeholder="000000"
+                maxLength={6}
+                value={sessionPinInput}
+                onChange={e => setSessionPinInput(e.target.value)}
+                className="w-full text-center text-3xl tracking-widest font-mono p-4 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-brand-500 outline-none mb-4"
+              />
+              {sessionError && <p className="text-rose-500 text-sm mb-4 font-medium">{sessionError}</p>}
+              <button
+                onClick={handleJoinSession}
+                className="w-full py-4 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all"
+              >
+                Join Session
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-slate-500 mb-6">You have successfully joined the session. Please wait for the teacher to launch the exam.</p>
+              <div className="flex justify-center gap-2 mb-6">
+                <div className="w-3 h-3 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-3 h-3 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-3 h-3 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
+            </>
+          )}
         </div>
       </Layout>
     );
