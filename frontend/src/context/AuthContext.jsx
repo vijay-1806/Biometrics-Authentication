@@ -34,6 +34,25 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  // Global Axios interceptor for single-device session enforcement
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response && error.response.status === 401 && error.response.data?.sessionExpired) {
+          alert('🔒 Session Expired: Your account was logged into from another device.');
+          setToken('');
+          setUser(null);
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
+  }, []);
+
   // Fetch user profile on load if token exists
   useEffect(() => {
     const fetchUser = async () => {

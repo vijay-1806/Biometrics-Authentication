@@ -2,8 +2,8 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 // Helper to generate JWT token
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'supersecretlmskey12345', {
+const generateToken = (id, sessionId) => {
+  return jwt.sign({ id, sessionId }, process.env.JWT_SECRET || 'supersecretlmskey12345', {
     expiresIn: '30d',
   });
 };
@@ -26,12 +26,15 @@ const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
+    const sessionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+
     // Create user
     const user = await User.create({
       name,
       email,
       password,
       role: role || 'student', // Default to student
+      sessionId,
     });
 
     if (user) {
@@ -40,7 +43,7 @@ const registerUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        token: generateToken(user._id),
+        token: generateToken(user._id, sessionId),
       });
     } else {
       res.status(400).json({ message: 'Invalid user data' });
@@ -66,12 +69,16 @@ const loginUser = async (req, res) => {
     const user = await User.findOne({ email }).select('+password');
 
     if (user && (await user.matchPassword(password))) {
+      const sessionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+      user.sessionId = sessionId;
+      await user.save();
+
       res.json({
         _id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
-        token: generateToken(user._id),
+        token: generateToken(user._id, sessionId),
       });
     } else {
       res.status(401).json({ message: 'Invalid email or password' });
