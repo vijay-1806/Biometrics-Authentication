@@ -222,19 +222,13 @@ const scoreWindow = async (req, res) => {
       clearTimeout(timeoutId);
     }
 
-    // Not enough enrollment samples yet for this student -- same
-    // "don't treat as anomaly" fallback as the old model_not_ready path.
-    if (verifyResult.state === 'collecting') {
-      return res.status(200).json({ scored: false, reason: 'model_not_ready' });
-    }
-
     // Get or create session
     let session = await BehaviorSession.findOne({ student: studentId, exam: examId });
     if (!session) {
       session = new BehaviorSession({ student: studentId, exam: examId, smoothedScore: 0.0, history: [], totalWindowsScored: 0 });
     }
 
-    // Mid-session device change detection (unchanged)
+    // Mid-session device change detection
     if (session.initialDeviceInfo && deviceInfo) {
       const changed =
         session.initialDeviceInfo.userAgent !== deviceInfo.userAgent ||
@@ -293,11 +287,9 @@ const scoreWindow = async (req, res) => {
     session.totalWindowsScored = (session.totalWindowsScored || 0) + 1;
     if (deviceInfo) session.deviceInfo = deviceInfo;
 
-    // The Behavior API already smooths internally (rolling_avg_trust,
-    // last 5 samples). We layer Node's own exponential smoothing on top
-    // for continuity with the existing session.history/UI, using its
-    // rolling_avg_trust as the raw input.
-    const rawScore = verifyResult.trust_score ?? verifyResult.rolling_avg_trust ?? 75;
+    const isCollecting = !verifyResult || verifyResult.state === 'collecting';
+    const rawScore = isCollecting ? 85.0 : (verifyResult.trust_score ?? verifyResult.rolling_avg_trust ?? 75);
+
     if (session.totalWindowsScored <= 1 || session.smoothedScore === 0) {
       session.smoothedScore = rawScore;
     } else {
@@ -308,10 +300,8 @@ const scoreWindow = async (req, res) => {
 
     const now = req.body.mockTime || Date.now();
 
-    // Behavioral anomaly alert -- driven directly by the Behavior API's
-    // own action/risk_level instead of a locally-recomputed z-score
-    // threshold, since that logic (and its thresholds) now lives there.
-    if ((verifyResult.action === 'deny' || verifyResult.action === 'step_up') && !session.alreadyFlaggedRecently) {
+    // Behavioral anomaly alert
+    if (!isCollecting && (verifyResult.action === 'deny' || verifyResult.action === 'step_up') && !session.alreadyFlaggedRecently) {
       await BehaviorAlert.create({
         student: studentId,
         session: req.body.session || examId.toString(),
@@ -323,8 +313,6 @@ const scoreWindow = async (req, res) => {
         severity: verifyResult.action === 'deny' ? 'high' : 'medium',
         reviewed: false
       });
-      // Rhythm changes are tracked live via broadcastLiveScore (Trust score bar),
-      // so we do not flood the Anomaly Event Stream feed with rhythm messages.
 
       session.alreadyFlaggedRecently = true;
       session.flagTimeoutEnd = new Date(now + 60000);
@@ -337,21 +325,19 @@ const scoreWindow = async (req, res) => {
 
     await session.save();
 
-    // NEW: push a live update every window (not just on anomaly) so the
-    // teacher dashboard can show a continuously updating trust score and
-    // tab-switch count per student, not just a feed of past alerts.
+    // Push live update every window (even during collecting state) so tab-switches and pastes render live
     broadcastLiveScore(examId, studentId, {
-      trustScore: verifyResult.trust_score,
-      rollingAvgTrust: verifyResult.rolling_avg_trust,
+      trustScore: isCollecting ? 85.0 : verifyResult.trust_score,
+      rollingAvgTrust: isCollecting ? 85.0 : verifyResult.rolling_avg_trust,
       smoothedScore: session.smoothedScore,
-      riskLevel: verifyResult.risk_level,
-      action: verifyResult.action,
+      riskLevel: isCollecting ? 'low' : verifyResult.risk_level,
+      action: isCollecting ? 'allow' : verifyResult.action,
       tabBlurCount: session.tabBlurCount || 0,
       pasteCount: session.pasteCount || 0,
       totalWindowsScored: session.totalWindowsScored
     });
 
-    res.status(200).json({ scored: true, smoothed: session.smoothedScore, action: verifyResult.action });
+    res.status(200).json({ scored: true, smoothed: session.smoothedScore, action: isCollecting ? 'allow' : verifyResult.action });
   } catch (error) {
     console.error('Error in scoreWindow:', error);
     res.status(500).json({ scored: false, reason: 'internal_error' });
