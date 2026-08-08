@@ -41,15 +41,34 @@ const initSocket = (server) => {
         return socket.emit('join-error', 'Invalid PIN or session ended');
       }
 
-      // Add student
+      const studentIdStr = String(student.id || student._id || '');
+
+      // Evict any previous socket connection for this student ID to prevent duplicate candidate rows
+      for (const existingSocketId in session.students) {
+        const existingStudent = session.students[existingSocketId];
+        if (String(existingStudent.id || existingStudent._id || '') === studentIdStr) {
+          delete session.students[existingSocketId];
+          delete socketToPin[existingSocketId];
+        }
+      }
+
+      // Add active student
       session.students[socket.id] = student;
       socketToPin[socket.id] = pin;
       socket.join(pin);
 
-      console.log(`Student ${student.name} joined session ${pin}`);
+      console.log(`Student ${student.name} (${studentIdStr}) joined session ${pin}`);
+
+      // Deduplicate student objects by ID for teacher broadcast
+      const uniqueStudentsMap = {};
+      Object.values(session.students).forEach(s => {
+        const key = String(s._id || s.id || '');
+        uniqueStudentsMap[key] = s;
+      });
+      const uniqueList = Object.values(uniqueStudentsMap);
 
       // Notify teacher
-      io.to(session.teacherSocketId).emit('student-joined', Object.values(session.students));
+      io.to(session.teacherSocketId).emit('student-joined', uniqueList);
 
       // If exam already active, immediately start the student
       if (session.status === 'active') {
@@ -85,7 +104,15 @@ const initSocket = (server) => {
           // Student disconnected
           console.log(`Student disconnected from session ${pin}`);
           delete session.students[socket.id];
-          io.to(session.teacherSocketId).emit('student-left', Object.values(session.students));
+          
+          const uniqueStudentsMap = {};
+          Object.values(session.students).forEach(s => {
+            const key = String(s._id || s.id || '');
+            uniqueStudentsMap[key] = s;
+          });
+          const uniqueList = Object.values(uniqueStudentsMap);
+
+          io.to(session.teacherSocketId).emit('student-left', uniqueList);
         }
       }
       delete socketToPin[socket.id];

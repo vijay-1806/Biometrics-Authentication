@@ -50,11 +50,21 @@ export default function LiveProctorDashboard() {
       socket.emit('create-session', { examId: selectedAssessment, pin: sessionPin });
 
       socket.on('student-joined', (updatedStudents) => {
-        setStudents(updatedStudents);
+        const uniqueMap = {};
+        (updatedStudents || []).forEach(s => {
+          const key = String(s._id || s.id || '');
+          if (key) uniqueMap[key] = s;
+        });
+        setStudents(Object.values(uniqueMap));
       });
 
       socket.on('student-left', (updatedStudents) => {
-        setStudents(updatedStudents);
+        const uniqueMap = {};
+        (updatedStudents || []).forEach(s => {
+          const key = String(s._id || s.id || '');
+          if (key) uniqueMap[key] = s;
+        });
+        setStudents(Object.values(uniqueMap));
       });
 
       socket.on('student-anomaly', ({ studentId, alert }) => {
