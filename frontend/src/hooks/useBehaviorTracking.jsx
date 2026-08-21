@@ -86,6 +86,21 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
 
       if (e.type === 'keydown' || e.type === 'keyup') {
         eventData.key = e.key;
+
+        // Fallback for Ctrl+V or Cmd+V paste shortcut
+        if (e.type === 'keydown' && (e.key === 'v' || e.key === 'V') && (e.ctrlKey || e.metaKey)) {
+          const now = Date.now();
+          const lastEvent = eventsBuffer.current[eventsBuffer.current.length - 1];
+          if (!lastEvent || lastEvent.type !== 'paste' || (now - lastEvent.timestamp > 300)) {
+            eventsBuffer.current.push({
+              type: 'paste',
+              timestamp: now,
+              length: 50
+            });
+            console.log('[BehaviorTracking] PASTE detected via Ctrl+V / Cmd+V shortcut');
+            setTimeout(() => sendWindowRef.current?.(true), 10);
+          }
+        }
       } else if (e.type === 'mousemove' || e.type === 'pointermove') {
         eventData.type = 'mousemove';
         eventData.x = e.clientX;
@@ -140,7 +155,7 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
         length: pastedText.length || 50
       });
 
-      console.log('[BehaviorTracking] PASTE detected, length:', pastedText.length);
+      console.log('[BehaviorTracking] PASTE detected, length:', pastedText.length || 50);
       // Use ref so this closure always calls the latest sendWindow
       setTimeout(() => sendWindowRef.current?.(true), 10);
     };

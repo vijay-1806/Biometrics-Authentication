@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const BehaviorWindow = require('../models/BehaviorWindow');
 const BehaviorModel = require('../models/BehaviorModel');
 const BehaviorSession = require('../models/BehaviorSession');
@@ -27,7 +28,7 @@ const extractFeatures = (events) => {
     if (e.type === 'keyup') keyups.push(e);
     if (e.type === 'mousemove') mousemoves.push(e);
     if (e.type === 'click') clicks++;
-    if ((e.type === 'visibilitychange' && e.hidden) || e.type === 'blur') blurs++;
+    if ((e.type === 'visibilitychange' && (e.hidden || e.source)) || e.type === 'blur') blurs++;
   });
 
   // Dwell times (time between keydown and keyup for same key)
@@ -92,7 +93,7 @@ const extractFeatures = (events) => {
 
   const pasteEvents = events.filter(e => e.type === 'paste');
   const pasteCount = pasteEvents.length;
-  const totalPastedChars = pasteEvents.reduce((sum, e) => sum + e.length, 0);
+  const totalPastedChars = pasteEvents.reduce((sum, e) => sum + (e.length || 50), 0);
 
   return {
     biometricFeatures: {
@@ -129,9 +130,10 @@ const postWindow = async (req, res) => {
       return res.status(429).json({ message: 'Payload too large. Request rejected.' });
     }
 
-    const hasTabBlur = events.some(e => e.type === 'visibilitychange' && e.hidden);
+    const hasTabBlur = events.some(e => (e.type === 'visibilitychange' && (e.hidden || e.source)) || e.type === 'blur');
+    const hasPaste = events.some(e => e.type === 'paste');
 
-    if (events.length <= 10 && !hasTabBlur) {
+    if (events.length <= 10 && !hasTabBlur && !hasPaste) {
       return res.status(200).json({ message: 'Window skipped (too few events).' });
     }
 
@@ -193,15 +195,24 @@ const scoreWindow = async (req, res) => {
 
     // Get or create session for student
     let session = null;
-    if (examId) {
+    const isValidExamId = examId && mongoose.Types.ObjectId.isValid(examId);
+    if (isValidExamId) {
       session = await BehaviorSession.findOne({ student: studentId, exam: examId });
     }
     if (!session) {
       session = await BehaviorSession.findOne({ student: studentId }).sort({ updatedAt: -1 });
     }
     if (!session) {
-      session = new BehaviorSession({ student: studentId, exam: examId, smoothedScore: 0.0, history: [], totalWindowsScored: 0 });
+      session = new BehaviorSession({
+        student: studentId,
+        exam: isValidExamId ? examId : undefined,
+        smoothedScore: 0.0,
+        history: [],
+        totalWindowsScored: 0
+      });
     }
+
+    const sessionString = req.body.session || (examId ? String(examId) : 'general');
 
     // Mid-session device change detection
     if (session.initialDeviceInfo && deviceInfo) {
@@ -212,8 +223,8 @@ const scoreWindow = async (req, res) => {
       if (changed && !session.deviceChangeFlagged) {
         const alert = await BehaviorAlert.create({
           student: studentId,
-          session: req.body.session || examId.toString(),
-          exam: examId,
+          session: sessionString,
+          exam: isValidExamId ? examId : undefined,
           alertType: 'device_change',
           topDeviatingFeatures: { from: session.initialDeviceInfo, to: deviceInfo },
           severity: 'low',
@@ -231,8 +242,8 @@ const scoreWindow = async (req, res) => {
       session.pasteCount = (session.pasteCount || 0) + explicitFlags.pasteCount;
       const alert = await BehaviorAlert.create({
         student: studentId,
-        exam: examId,
-        session: req.body.session || examId.toString(),
+        exam: isValidExamId ? examId : undefined,
+        session: sessionString,
         alertType: 'paste_detected',
         topDeviatingFeatures: {
           pasteCount: explicitFlags.pasteCount,
@@ -250,8 +261,8 @@ const scoreWindow = async (req, res) => {
       console.log(`[scoreWindow] TAB SWITCH detected! total=${session.tabBlurCount}`);
       const tabAlert = await BehaviorAlert.create({
         student: studentId,
-        exam: examId,
-        session: req.body.session || (examId ? examId.toString() : sessionId.current),
+        exam: isValidExamId ? examId : undefined,
+        session: sessionString,
         alertType: 'tab_switch',
         topDeviatingFeatures: { tabBlurCount: explicitFlags.tabBlurCount },
         severity: 'low',
@@ -332,8 +343,8 @@ const scoreWindow = async (req, res) => {
     if (!isCollecting && (verifyResult.action === 'deny' || verifyResult.action === 'step_up') && !session.alreadyFlaggedRecently) {
       await BehaviorAlert.create({
         student: studentId,
-        session: req.body.session || examId.toString(),
-        exam: examId,
+        session: sessionString,
+        exam: isValidExamId ? examId : undefined,
         alertType: 'behavioral_anomaly',
         score: session.smoothedScore,
         topDeviatingFeatures: [verifyResult.reason || 'Trust score below threshold'],
@@ -365,10 +376,18 @@ const scoreWindow = async (req, res) => {
       totalWindowsScored: session.totalWindowsScored
     });
 
-    res.status(200).json({ scored: true, smoothed: session.smoothedScore, action: isCollecting ? 'allow' : verifyResult.action });
+    return res.status(200).json({
+      scored: true,
+      smoothedScore: session.smoothedScore,
+      action: isCollecting ? 'allow' : verifyResult.action,
+      riskLevel: isCollecting ? 'low' : verifyResult.risk_level,
+      tabBlurCount: session.tabBlurCount || 0,
+      pasteCount: session.pasteCount || 0,
+      totalWindowsScored: session.totalWindowsScored
+    });
   } catch (error) {
     console.error('Error in scoreWindow:', error);
-    res.status(500).json({ scored: false, reason: 'internal_error' });
+    res.status(500).json({ scored: false, reason: 'internal_error', message: error.message });
   }
 };
 
