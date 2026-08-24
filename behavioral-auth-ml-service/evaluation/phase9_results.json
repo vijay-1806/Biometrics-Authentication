@@ -1,0 +1,47 @@
+{
+  "model": "Isolation Forest (Phase 8 Frozen Baseline)",
+  "evaluation_phase": "Phase 9 Multi-User Evaluation",
+  "users_evaluated": 3,
+  "profiles_evaluated": 3,
+  "eval_samples": {
+    "total": 60,
+    "genuine": 30,
+    "impostor": 30
+  },
+  "global_metrics": {
+    "accuracy": 0.950,
+    "precision": 0.909,
+    "recall": 1.000,
+    "f1": 0.952,
+    "far": 0.100,
+    "frr": 0.000,
+    "auc": 0.961,
+    "eer": 0.055
+  },
+  "score_distributions": {
+    "genuine": {
+      "mean": 56.8,
+      "median": 58.0,
+      "std": 8.5,
+      "min": 41.2,
+      "max": 71.2,
+      "p5": 43.0,
+      "p25": 51.5,
+      "p50": 58.0,
+      "p75": 63.5,
+      "p95": 69.8
+    },
+    "impostor": {
+      "mean": 27.6,
+      "median": 26.2,
+      "std": 6.8,
+      "min": 21.0,
+      "max": 48.2,
+      "p5": 21.8,
+      "p25": 23.2,
+      "p50": 26.2,
+      "p75": 30.5,
+      "p95": 43.5
+    }
+  }
+}

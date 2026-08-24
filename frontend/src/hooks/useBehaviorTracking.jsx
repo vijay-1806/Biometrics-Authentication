@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 
-export const useBehaviorTracking = (context = 'general', examId = null) => {
+export const useBehaviorTracking = (context = 'general', examId = null, assessmentSessionId = null) => {
   const { user, token } = useAuth();
   const eventsBuffer = useRef([]);
   const sessionId = useRef(
@@ -24,8 +24,8 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
         ev => ev.type === 'paste' || (ev.type === 'visibilitychange' && ev.hidden)
       );
 
-      if (!force && !hasSecurityEvent && events.length <= 10) {
-        return; // not enough data, leave buffer intact
+      if (!force && !hasSecurityEvent && events.length === 0) {
+        return; // empty buffer, nothing to send
       }
 
       eventsBuffer.current = [];
@@ -63,6 +63,9 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
         if (isExam) {
           payload.examId = examId;
           payload.studentId = user._id;
+          if (assessmentSessionId) {
+            payload.assessmentSessionId = assessmentSessionId;
+          }
         }
 
         const res = await axios.post(endpoint, payload, {

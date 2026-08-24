@@ -7,7 +7,9 @@ const {
   enrollPassage,
   getBiometricStatus,
   getPassage,
-  retrainUser
+  retrainUser,
+  getSessionReport,
+  getTeacherAnalytics
 } = require('../controllers/behaviorController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -15,6 +17,10 @@ const router = express.Router();
 
 router.post('/window', protect, postWindow);
 router.post('/score', protect, scoreWindow);
+
+// Candidate Report & Teacher Analytics Routes
+router.get('/report/:assessmentSessionId', protect, getSessionReport);
+router.get('/analytics/:assessmentSessionId', protect, authorize('teacher', 'admin'), getTeacherAnalytics);
 
 // Enrollment, Status & Retraining Routes
 router.post('/enroll', protect, enrollPassage);

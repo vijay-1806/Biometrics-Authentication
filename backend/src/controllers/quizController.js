@@ -1,6 +1,7 @@
 const Quiz = require('../models/Quiz');
 const Result = require('../models/Result');
 const Course = require('../models/Course');
+const { isStudentAuthorizedForExam } = require('../socketHandler');
 
 // @desc    Create a quiz
 // @route   POST /api/quizzes
@@ -48,6 +49,16 @@ const getQuizById = async (req, res) => {
       return res.status(404).json({ message: 'Quiz not found' });
     }
 
+    if (quiz.isExam && req.user && req.user.role === 'student') {
+      const authCheck = isStudentAuthorizedForExam(req.user._id, req.params.id);
+      if (!authCheck.authorized) {
+        return res.status(403).json({ 
+          message: 'Active assessment session required. Please join using the 6-digit PIN on the lobby screen.',
+          requiresSessionPin: true 
+        });
+      }
+    }
+
     // Secure correct answers: strip correctAnswerIndex for student roles
     if (req.user.role === 'student') {
       const sanitizedQuestions = quiz.questions.map((q) => ({
@@ -83,6 +94,13 @@ const submitQuiz = async (req, res) => {
 
     if (!quiz) {
       return res.status(404).json({ message: 'Quiz not found' });
+    }
+
+    if (quiz.isExam && req.user && req.user.role === 'student') {
+      const authCheck = isStudentAuthorizedForExam(req.user._id, req.params.id);
+      if (!authCheck.authorized) {
+        return res.status(403).json({ message: 'Active assessment session required to submit quiz.' });
+      }
     }
 
     if (!answers || !Array.isArray(answers)) {

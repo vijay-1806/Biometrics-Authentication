@@ -181,34 +181,63 @@ const scoreWindow = async (req, res) => {
       return res.status(400).json({ message: 'Invalid payload: missing events array.' });
     }
 
-    const hasTabBlur = events.some(e => (e.type === 'visibilitychange' && (e.hidden || e.source)) || e.type === 'blur');
-    const hasPaste = events.some(e => e.type === 'paste');
-    console.log(`[scoreWindow] student=${studentId} events=${events.length} hasTabBlur=${hasTabBlur} hasPaste=${hasPaste}`);
-
-    if (events.length <= 10 && !hasTabBlur && !hasPaste) {
-      return res.status(200).json({ scored: false, reason: 'too_few_events' });
-    }
-
-    // local, rule-based flags (paste / tab-switch) -- unrelated to the ML score
     const { explicitFlags } = extractFeatures(events);
-    console.log(`[scoreWindow] explicitFlags:`, explicitFlags);
+    const hasTabBlur = (explicitFlags?.tabBlurCount || 0) > 0 || events.some(e => (e.type === 'visibilitychange' && (e.hidden || e.source)) || e.type === 'blur');
+    const hasPaste = (explicitFlags?.pasteCount || 0) > 0 || events.some(e => e.type === 'paste');
+    console.log(`[scoreWindow] student=${studentId} events=${events.length} explicitFlags=`, explicitFlags, `hasTabBlur=${hasTabBlur} hasPaste=${hasPaste}`);
 
     // Get or create session for student
     let session = null;
     const isValidExamId = examId && mongoose.Types.ObjectId.isValid(examId);
-    if (isValidExamId) {
+    const assessmentSessionId = req.body.assessmentSessionId;
+
+    if (assessmentSessionId) {
+      session = await BehaviorSession.findOne({ student: studentId, assessmentSessionId: assessmentSessionId });
+    } else if (isValidExamId) {
       session = await BehaviorSession.findOne({ student: studentId, exam: examId });
-    }
-    if (!session) {
+    } else {
       session = await BehaviorSession.findOne({ student: studentId }).sort({ updatedAt: -1 });
     }
+
     if (!session) {
       session = new BehaviorSession({
         student: studentId,
         exam: isValidExamId ? examId : undefined,
-        smoothedScore: 0.0,
-        history: [],
-        totalWindowsScored: 0
+        assessmentSessionId: assessmentSessionId || undefined,
+        smoothedScore: 88.0,
+        history: [88],
+        totalWindowsScored: 0,
+        tabBlurCount: 0,
+        pasteCount: 0
+      });
+    }
+
+    // Candidate idle / thinking pause (no tab blur & no paste)
+    if (events.length <= 10 && !hasTabBlur && !hasPaste) {
+      const currentScore = session.smoothedScore > 0 ? session.smoothedScore : 88.0;
+      broadcastLiveScore(examId, studentId, {
+        trustScore: currentScore,
+        rollingAvgTrust: currentScore,
+        smoothedScore: currentScore,
+        riskLevel: 'low',
+        action: 'allow',
+        degraded: false,
+        tabBlurCount: session.tabBlurCount || 0,
+        pasteCount: session.pasteCount || 0,
+        totalWindowsScored: session.totalWindowsScored
+      }, session.assessmentSessionId || assessmentSessionId);
+
+      return res.status(200).json({
+        scored: true,
+        degraded: false,
+        mlState: 'active',
+        smoothedScore: currentScore,
+        trustScore: currentScore,
+        action: 'allow',
+        riskLevel: 'low',
+        tabBlurCount: session.tabBlurCount || 0,
+        pasteCount: session.pasteCount || 0,
+        totalWindowsScored: session.totalWindowsScored
       });
     }
 
@@ -326,30 +355,65 @@ const scoreWindow = async (req, res) => {
       }
     }
 
-    const isCollecting = !verifyResult || verifyResult.state === 'collecting';
-    const rawScore = isCollecting ? 85.0 : (verifyResult.trust_score ?? verifyResult.rolling_avg_trust ?? 75);
+    const mlFailed = !verifyResult && formattedEvents.length >= 6;
+    const isCollecting = (!verifyResult && !mlFailed) || (verifyResult && verifyResult.state === 'collecting');
+    
+    // 1. Determine Biometric ML Trust Score (from FastAPI IsolationForest model)
+    let biometricScore = 90.0;
+    if (!mlFailed && verifyResult && typeof verifyResult.trust_score === 'number') {
+      biometricScore = verifyResult.trust_score;
+    } else if (!mlFailed && verifyResult && typeof verifyResult.rolling_avg_trust === 'number') {
+      biometricScore = verifyResult.rolling_avg_trust;
+    } else if (session.smoothedScore > 0) {
+      biometricScore = session.smoothedScore;
+    }
 
+    // 2. Immediate window-level penalty (applied only for events in THIS current window)
+    const windowTabBlurPenalty = (explicitFlags.tabBlurCount || 0) * 15;
+    const windowPastePenalty = (explicitFlags.pasteCount || 0) * 10;
+    const windowPenalty = Math.min(30, windowTabBlurPenalty + windowPastePenalty);
+
+    // 3. Compute final raw trust score for this window
+    const rawScore = Math.max(15, Math.min(98, Math.round(biometricScore - windowPenalty)));
+
+    // 4. Dynamic Risk Level: directly matches current real-time trust score & window anomalies!
+    let calculatedRiskLevel = 'low';
+    if (rawScore < 40) {
+      calculatedRiskLevel = 'critical';
+    } else if (rawScore < 55) {
+      calculatedRiskLevel = 'high';
+    } else if (rawScore < 70 || windowPenalty > 0) {
+      calculatedRiskLevel = 'medium';
+    } else {
+      calculatedRiskLevel = 'low';
+    }
+
+    const finalRiskLevel = calculatedRiskLevel;
+    const finalAction = finalRiskLevel === 'critical' ? 'deny' : (finalRiskLevel === 'high' ? 'step_up' : 'allow');
+
+    // 5. Update session smoothed score & trajectory history
     if (session.totalWindowsScored <= 1 || session.smoothedScore === 0) {
       session.smoothedScore = rawScore;
     } else {
       session.smoothedScore = Math.round(0.3 * session.smoothedScore + 0.7 * rawScore);
     }
+
     session.history.push(session.smoothedScore);
     if (session.history.length > 20) session.history.shift();
 
     const now = req.body.mockTime || Date.now();
 
     // Behavioral anomaly alert
-    if (!isCollecting && (verifyResult.action === 'deny' || verifyResult.action === 'step_up') && !session.alreadyFlaggedRecently) {
+    if (!mlFailed && !isCollecting && (verifyResult?.action === 'deny' || verifyResult?.action === 'step_up') && !session.alreadyFlaggedRecently) {
       await BehaviorAlert.create({
         student: studentId,
         session: sessionString,
         exam: isValidExamId ? examId : undefined,
         alertType: 'behavioral_anomaly',
         score: session.smoothedScore,
-        topDeviatingFeatures: [verifyResult.reason || 'Trust score below threshold'],
+        topDeviatingFeatures: [verifyResult?.reason || 'Trust score below threshold'],
         deviceInfo: deviceInfo || session.deviceInfo,
-        severity: verifyResult.action === 'deny' ? 'high' : 'medium',
+        severity: verifyResult?.action === 'deny' ? 'high' : 'medium',
         reviewed: false
       });
 
@@ -364,23 +428,27 @@ const scoreWindow = async (req, res) => {
 
     await session.save();
 
-    // Push live update every window (even during collecting state) so tab-switches and pastes render live
+    // Push live update every window
     broadcastLiveScore(examId, studentId, {
-      trustScore: isCollecting ? 85.0 : verifyResult.trust_score,
-      rollingAvgTrust: isCollecting ? 85.0 : verifyResult.rolling_avg_trust,
+      trustScore: rawScore,
+      rollingAvgTrust: rawScore,
       smoothedScore: session.smoothedScore,
-      riskLevel: isCollecting ? 'low' : verifyResult.risk_level,
-      action: isCollecting ? 'allow' : verifyResult.action,
+      riskLevel: finalRiskLevel,
+      action: finalAction,
+      degraded: mlFailed,
       tabBlurCount: session.tabBlurCount || 0,
       pasteCount: session.pasteCount || 0,
       totalWindowsScored: session.totalWindowsScored
-    });
+    }, session.assessmentSessionId || assessmentSessionId);
 
     return res.status(200).json({
       scored: true,
+      degraded: mlFailed,
+      mlState: mlFailed ? 'DEGRADED' : (isCollecting ? 'collecting' : 'active'),
       smoothedScore: session.smoothedScore,
-      action: isCollecting ? 'allow' : verifyResult.action,
-      riskLevel: isCollecting ? 'low' : verifyResult.risk_level,
+      trustScore: rawScore,
+      action: finalAction,
+      riskLevel: finalRiskLevel,
       tabBlurCount: session.tabBlurCount || 0,
       pasteCount: session.pasteCount || 0,
       totalWindowsScored: session.totalWindowsScored
@@ -528,6 +596,204 @@ const retrainUser = async (req, res) => {
   }
 };
 
+const getSessionReport = async (req, res) => {
+  try {
+    const { assessmentSessionId } = req.params;
+    let targetStudentId = req.query.studentId || req.user._id.toString();
+
+    // Authorization Check
+    if (req.user.role === 'student') {
+      if (targetStudentId !== req.user._id.toString()) {
+        return res.status(403).json({ error: 'Access denied: Students may only view their own report.' });
+      }
+    }
+
+    const sessionDoc = await BehaviorSession.findOne({
+      student: targetStudentId,
+      assessmentSessionId: assessmentSessionId
+    }).populate('student', 'name email');
+
+    if (!sessionDoc) {
+      return res.status(404).json({ error: 'Behavioral session record not found for this assessment session.' });
+    }
+
+    const alerts = await BehaviorAlert.find({
+      student: targetStudentId,
+      $or: [{ session: assessmentSessionId }, { exam: sessionDoc.exam }]
+    }).sort({ createdAt: 1 }).lean();
+
+    const history = sessionDoc.history || [];
+    const initialTrust = history.length > 0 ? history[0] : sessionDoc.smoothedScore;
+    const finalTrust = sessionDoc.smoothedScore;
+    const avgTrust = history.length > 0 ? Math.round(history.reduce((a, b) => a + b, 0) / history.length) : finalTrust;
+    const minTrust = history.length > 0 ? Math.min(...history) : finalTrust;
+    const maxTrust = history.length > 0 ? Math.max(...history) : finalTrust;
+
+    let highestRisk = 'LOW';
+    const transitions = [];
+    let currentRisk = 'LOW';
+
+    alerts.forEach(alert => {
+      let nextRisk = 'LOW';
+      if (alert.severity === 'high' || alert.alertType === 'behavioral_anomaly') nextRisk = 'HIGH';
+      else if (alert.severity === 'medium' || alert.alertType === 'paste_detected') nextRisk = 'MEDIUM';
+      else if (alert.alertType === 'tab_switch' || alert.alertType === 'device_change') nextRisk = 'LOW';
+
+      if (nextRisk === 'HIGH') highestRisk = 'HIGH';
+      else if (nextRisk === 'MEDIUM' && highestRisk !== 'HIGH') highestRisk = 'MEDIUM';
+
+      if (nextRisk !== currentRisk) {
+        transitions.push({
+          timestamp: alert.createdAt,
+          from: currentRisk,
+          to: nextRisk,
+          trustScore: alert.score ?? finalTrust,
+          reason: alert.alertType.replace('_', ' ').toUpperCase()
+        });
+        currentRisk = nextRisk;
+      }
+    });
+
+    let verdictStatus = 'AUTHENTICATED';
+    const verdictReasons = [];
+
+    if (finalTrust >= 75 && sessionDoc.tabBlurCount === 0 && sessionDoc.pasteCount === 0) {
+      verdictStatus = 'AUTHENTICATED';
+      verdictReasons.push('High behavioral baseline match maintained throughout assessment');
+    } else if (finalTrust >= 40 && sessionDoc.tabBlurCount <= 2 && sessionDoc.pasteCount <= 1) {
+      verdictStatus = 'REQUIRES_REVIEW';
+      if (sessionDoc.tabBlurCount > 0) verdictReasons.push(`${sessionDoc.tabBlurCount} tab switch event(s) recorded`);
+      if (sessionDoc.pasteCount > 0) verdictReasons.push(`${sessionDoc.pasteCount} paste operation(s) recorded`);
+      if (finalTrust < 70) verdictReasons.push(`Behavioral trust score dropped to ${finalTrust}%`);
+    } else {
+      verdictStatus = 'SUSPICIOUS';
+      if (sessionDoc.tabBlurCount > 2) verdictReasons.push(`Excessive tab switches (${sessionDoc.tabBlurCount})`);
+      if (sessionDoc.pasteCount > 1) verdictReasons.push(`Multiple paste events (${sessionDoc.pasteCount})`);
+      if (finalTrust < 40) verdictReasons.push(`Severe behavioral anomaly detected (${finalTrust}% trust)`);
+    }
+
+    res.json({
+      assessmentSessionId,
+      student: {
+        id: sessionDoc.student._id,
+        name: sessionDoc.student.name,
+        email: sessionDoc.student.email
+      },
+      session: {
+        status: sessionDoc.updatedAt ? 'ENDED' : 'ACTIVE',
+        updatedAt: sessionDoc.updatedAt,
+        totalWindowsScored: sessionDoc.totalWindowsScored || 0
+      },
+      trust: {
+        initial: initialTrust,
+        final: finalTrust,
+        average: avgTrust,
+        minimum: minTrust,
+        maximum: maxTrust,
+        history: history.length > 0 ? history : [finalTrust]
+      },
+      risk: {
+        initial: 'LOW',
+        final: currentRisk,
+        highest: highestRisk,
+        transitions
+      },
+      security: {
+        tabSwitches: sessionDoc.tabBlurCount || 0,
+        pasteEvents: sessionDoc.pasteCount || 0
+      },
+      behaviour: {
+        anomalyCount: alerts.filter(a => a.alertType === 'behavioral_anomaly').length,
+        totalAlerts: alerts.length
+      },
+      verdict: {
+        status: verdictStatus,
+        reasons: verdictReasons
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getSessionReport:', error);
+    res.status(500).json({ error: 'Server error generating candidate session report' });
+  }
+};
+
+const getTeacherAnalytics = async (req, res) => {
+  try {
+    const { assessmentSessionId } = req.params;
+
+    const sessions = await BehaviorSession.find({ assessmentSessionId })
+      .populate('student', 'name email')
+      .lean();
+
+    if (!sessions || sessions.length === 0) {
+      return res.status(404).json({ error: 'No sessions found for this assessment session ID.' });
+    }
+
+    const alerts = await BehaviorAlert.find({ session: assessmentSessionId }).lean();
+
+    const candidateSummaries = sessions.map(s => {
+      const finalTrust = s.smoothedScore || 85;
+      let riskLevel = 'LOW';
+      if (s.tabBlurCount > 2 || s.pasteCount > 1 || finalTrust < 40) riskLevel = 'HIGH';
+      else if (s.tabBlurCount > 0 || s.pasteCount > 0 || finalTrust < 70) riskLevel = 'MEDIUM';
+
+      return {
+        studentId: s.student._id,
+        name: s.student.name,
+        email: s.student.email,
+        trustScore: finalTrust,
+        riskLevel,
+        tabSwitches: s.tabBlurCount || 0,
+        pasteEvents: s.pasteCount || 0,
+        windowsScored: s.totalWindowsScored || 0,
+        lastSeen: s.updatedAt
+      };
+    });
+
+    const totalParticipants = candidateSummaries.length;
+    const scores = candidateSummaries.map(c => c.trustScore);
+    const avgTrust = Math.round(scores.reduce((a, b) => a + b, 0) / totalParticipants);
+    const minTrust = Math.min(...scores);
+    const maxTrust = Math.max(...scores);
+
+    const riskDistribution = {
+      LOW: candidateSummaries.filter(c => c.riskLevel === 'LOW').length,
+      MEDIUM: candidateSummaries.filter(c => c.riskLevel === 'MEDIUM').length,
+      HIGH: candidateSummaries.filter(c => c.riskLevel === 'HIGH').length,
+      CRITICAL: candidateSummaries.filter(c => c.riskLevel === 'CRITICAL').length
+    };
+
+    const totalTabSwitches = candidateSummaries.reduce((acc, c) => acc + c.tabSwitches, 0);
+    const totalPasteEvents = candidateSummaries.reduce((acc, c) => acc + c.pasteEvents, 0);
+
+    res.json({
+      assessmentSessionId,
+      participants: {
+        total: totalParticipants,
+        connected: totalParticipants,
+        completed: sessions.filter(s => s.updatedAt).length
+      },
+      trust: {
+        average: avgTrust,
+        minimum: minTrust,
+        maximum: maxTrust
+      },
+      riskDistribution,
+      security: {
+        totalTabSwitches,
+        totalPasteEvents,
+        totalAlerts: alerts.length
+      },
+      candidates: candidateSummaries
+    });
+
+  } catch (error) {
+    console.error('Error in getTeacherAnalytics:', error);
+    res.status(500).json({ error: 'Server error generating teacher assessment analytics' });
+  }
+};
+
 module.exports = {
   postWindow,
   scoreWindow,
@@ -537,5 +803,7 @@ module.exports = {
   enrollPassage,
   getBiometricStatus,
   getPassage,
-  retrainUser
+  retrainUser,
+  getSessionReport,
+  getTeacherAnalytics
 };

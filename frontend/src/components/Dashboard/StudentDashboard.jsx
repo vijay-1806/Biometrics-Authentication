@@ -114,18 +114,8 @@ const StudentDashboard = () => {
         avgScore: gradedItemsCount > 0 ? Math.round(scoreSum / gradedItemsCount) : 0
       });
 
-      // Default mock history data for premium look if student has no attempts yet
-      if (historyData.length === 0) {
-        setChartData([
-          { name: 'Week 1', score: 60 },
-          { name: 'Week 2', score: 75 },
-          { name: 'Week 3', score: 70 },
-          { name: 'Week 4', score: 85 },
-          { name: 'Week 5', score: 90 },
-        ]);
-      } else {
-        setChartData(historyData.slice(-6)); // last 6 items
-      }
+      // Store only genuine submission history from real student data
+      setChartData(historyData.slice(-6));
 
     } catch (err) {
       console.error('Error fetching student dashboard details', err);
@@ -233,30 +223,37 @@ const StudentDashboard = () => {
               <p className="text-xs text-slate-400">Score progress across quizzes and coding submissions</p>
             </div>
           </div>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="scoreColor" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800" />
-                <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} tickLine={false} />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'rgba(15, 23, 42, 0.9)', 
-                    border: 'none', 
-                    borderRadius: '8px',
-                    color: '#fff',
-                    fontSize: '12px'
-                  }} 
-                />
-                <Area type="monotone" dataKey="score" stroke="#8b5cf6" strokeWidth={2.5} fillOpacity={1} fill="url(#scoreColor)" />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="h-64 w-full flex items-center justify-center">
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="scoreColor" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800" />
+                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} tickLine={false} />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+                      border: 'none', 
+                      borderRadius: '8px',
+                      color: '#fff',
+                      fontSize: '12px'
+                    }} 
+                  />
+                  <Area type="monotone" dataKey="score" stroke="#8b5cf6" strokeWidth={2.5} fillOpacity={1} fill="url(#scoreColor)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-slate-400 text-sm font-medium">No submission history yet.</p>
+                <p className="text-xs text-slate-400 mt-1">Complete assignments or quizzes to view performance metrics.</p>
+              </div>
+            )}
           </div>
         </div>
 
