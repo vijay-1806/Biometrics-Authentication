@@ -65,8 +65,9 @@ const loginUser = async (req, res) => {
       return res.status(400).json({ message: 'Please enter all fields' });
     }
 
-    // Check for user email (need to explicitly select password since select: false in model)
-    const user = await User.findOne({ email }).select('+password');
+    // Check for user email (case-insensitive search)
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') } }).select('+password');
 
     if (user && (await user.matchPassword(password))) {
       const sessionId = Date.now().toString(36) + Math.random().toString(36).substring(2);

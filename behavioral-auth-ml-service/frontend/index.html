@@ -1180,7 +1180,10 @@
 <div id="toast-container"></div>
 
 <script>
-const API = "http://localhost:8000";
+// Dynamic API URL: automatically adapts to ngrok tunnels, LAN IP addresses, or localhost
+const API = (window.location.origin && window.location.origin !== "null" && !window.location.origin.startsWith("file://")) 
+  ? window.location.origin 
+  : "http://localhost:8000";
 
 // State store
 const appState = {

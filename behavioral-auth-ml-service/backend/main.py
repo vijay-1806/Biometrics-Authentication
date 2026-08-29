@@ -377,8 +377,19 @@ def get_users():
     return {"users": storage.list_users()}
 
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
+if os.path.exists(frontend_path):
+    app.mount("/console", StaticFiles(directory=frontend_path, html=True), name="console")
+
 @app.get("/")
 def root():
+    index_file = os.path.join(frontend_path, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
     return {"status": "ok", "service": "behavioral-auth-api"}
+
 
 
