@@ -75,44 +75,62 @@ def _state_for(n_samples: int) -> str:
 
 
 def _train(vectors: List[list]) -> dict:
-    """Fit a scaler + IsolationForest on a user's samples and calibrate
-    the trust-score scale against the training set itself."""
-    X = np.array(vectors)
-    scaler = StandardScaler().fit(X)
-    Xs = scaler.transform(X)
+    """Fit a scaler + IsolationForest on a user's clean samples and calibrate
+    the trust-score scale using robust quantiles against the training set."""
+    arr = np.array(vectors)
+    # Filter out severe data-collection artifacts (e.g. key hold > 160ms, extreme jitter > 200ms)
+    mask = (arr[:, 0] < 160) & (arr[:, 1] < 200)
+    clean_vectors = arr[mask]
+    if len(clean_vectors) < 8:
+        clean_vectors = arr  # fallback if too few samples
+
+    scaler = StandardScaler().fit(clean_vectors)
+    Xs = scaler.transform(clean_vectors)
     model = IsolationForest(
         n_estimators=200,
-        contamination=0.1,
+        contamination=0.05,
         random_state=42,
     ).fit(Xs)
     train_scores = model.decision_function(Xs)
+    
     return {
         "scaler": scaler,
         "model": model,
+        "q10": float(np.percentile(train_scores, 10)),
+        "q90": float(np.percentile(train_scores, 90)),
+        "median": float(np.median(train_scores)),
         "score_min": float(train_scores.min()),
         "score_max": float(train_scores.max()),
-        "n_samples": len(vectors),
+        "n_samples": len(clean_vectors),
     }
 
 
 def _trust_score(bundle: dict, vector: np.ndarray) -> float:
     Xs = bundle["scaler"].transform([vector])
-    raw = bundle["model"].decision_function(Xs)[0]
-    lo, hi = bundle["score_min"], bundle["score_max"]
-    if hi - lo < 1e-9:
-        return 80.0
+    raw = float(bundle["model"].decision_function(Xs)[0])
     
-    # Calibrated soft-margin hybrid score mapping:
-    # Normal typing behavior (raw >= lo) maps to 70% - 98%
-    # Natural typing variation (raw slightly < lo) maps smoothly to 45% - 65% (prevents cliff false rejections)
-    # Severe impostor anomalies (dist >> 1.0) decay down to 20% - 30%
-    if raw >= lo:
-        normalized = (raw - lo) / (hi - lo + 1e-9)
-        scaled = 70.0 + 25.0 * min(normalized, 1.2)
+    med = bundle.get("median", 0.05)
+    q10 = bundle.get("q10", 0.0)
+    q90 = bundle.get("q90", 0.15)
+    
+    # Calibrated decision-boundary trust scoring:
+    # 1. Genuine strong match (raw >= med) -> 85% - 98%
+    # 2. Genuine natural variation (q10 <= raw < med) -> 72% - 85%
+    # 3. Uncertain / boundary zone (0.0 <= raw < q10) -> 55% - 70%
+    # 4. Impostor / Anomalous outlier (raw < 0.0) -> decays smoothly down to 20% - 48%
+    if raw >= med:
+        norm = (raw - med) / (q90 - med + 1e-6)
+        scaled = 85.0 + 10.0 * min(norm, 1.2)
+    elif raw >= q10:
+        norm = (raw - q10) / (med - q10 + 1e-6)
+        scaled = 72.0 + 13.0 * norm
+    elif raw >= 0.0:
+        norm = raw / (q10 + 1e-6) if q10 > 0 else 0.5
+        scaled = 55.0 + 17.0 * norm
     else:
-        dist = (lo - raw) / (abs(lo) + 1e-9)
-        # Sigmoidal soft-margin decay for genuine robustness
-        scaled = 70.0 - 50.0 * (dist / (dist + 0.8))
+        # Impostor: distance below the 0.0 decision threshold
+        dist = abs(raw) / 0.04
+        scaled = max(18.0, 50.0 - 32.0 * min(dist, 1.0))
 
     return float(np.clip(scaled, 15.0, 98.0))
 
