@@ -9,8 +9,8 @@ const behaviorSessionSchema = new mongoose.Schema(
     },
     exam: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Quiz', // Quizzes with isExam=true
-      required: true,
+      ref: 'Quiz',
+      required: false,
     },
     smoothedScore: {
       type: Number,
@@ -41,6 +41,23 @@ const behaviorSessionSchema = new mongoose.Schema(
     deviceChangeFlagged: {
       type: Boolean,
       default: false,
+    },
+    tabBlurCount: {
+      type: Number,
+      default: 0,
+    },
+    pasteCount: {
+      type: Number,
+      default: 0,
+    },
+    assessmentSessionId: {
+      type: String,
+      required: false,
+      index: true,
+    },
+    sessionPin: {
+      type: String,
+      required: false,
     }
   },
   {
@@ -50,5 +67,6 @@ const behaviorSessionSchema = new mongoose.Schema(
 
 // TTL index to automatically clear sessions after 24 hours (86400 seconds)
 behaviorSessionSchema.index({ createdAt: 1 }, { expireAfterSeconds: 86400 });
+behaviorSessionSchema.index({ student: 1, assessmentSessionId: 1 });
 
 module.exports = mongoose.model('BehaviorSession', behaviorSessionSchema);

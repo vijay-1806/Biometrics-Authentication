@@ -270,6 +270,14 @@ const TeacherDashboard = () => {
         
         {/* Creator shortcuts */}
         <div className="flex gap-3">
+          <Link
+            to="/admin/behavior"
+            className="flex items-center gap-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/50 px-4 py-2.5 rounded-xl border border-rose-100 dark:border-rose-900/30 transition-all"
+          >
+            <Eye size={16} />
+            <span>Live Session Proctoring</span>
+          </Link>
+
           <button
             onClick={() => { setShowCourseForm(true); setError(''); }}
             className="flex items-center gap-1.5 text-xs font-bold text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40 hover:bg-brand-100 dark:hover:bg-brand-900/50 px-4 py-2.5 rounded-xl border border-brand-100 dark:border-brand-900/30 transition-all"

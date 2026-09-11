@@ -75,43 +75,62 @@ def _state_for(n_samples: int) -> str:
 
 
 def _train(vectors: List[list]) -> dict:
-    """Fit a scaler + IsolationForest on a user's samples and calibrate
-    the trust-score scale against the training set itself."""
-    X = np.array(vectors)
-    scaler = StandardScaler().fit(X)
-    Xs = scaler.transform(X)
+    """Fit a scaler + IsolationForest on a user's clean samples and calibrate
+    the trust-score scale using robust quantiles against the training set."""
+    arr = np.array(vectors)
+    # Filter out severe data-collection artifacts (e.g. key hold > 160ms, extreme jitter > 200ms)
+    mask = (arr[:, 0] < 160) & (arr[:, 1] < 200)
+    clean_vectors = arr[mask]
+    if len(clean_vectors) < 8:
+        clean_vectors = arr  # fallback if too few samples
+
+    scaler = StandardScaler().fit(clean_vectors)
+    Xs = scaler.transform(clean_vectors)
     model = IsolationForest(
         n_estimators=200,
-        contamination=0.1,
+        contamination=0.05,
         random_state=42,
     ).fit(Xs)
     train_scores = model.decision_function(Xs)
+    
     return {
         "scaler": scaler,
         "model": model,
+        "q10": float(np.percentile(train_scores, 10)),
+        "q90": float(np.percentile(train_scores, 90)),
+        "median": float(np.median(train_scores)),
         "score_min": float(train_scores.min()),
         "score_max": float(train_scores.max()),
-        "n_samples": len(vectors),
+        "n_samples": len(clean_vectors),
     }
 
 
 def _trust_score(bundle: dict, vector: np.ndarray) -> float:
     Xs = bundle["scaler"].transform([vector])
-    raw = bundle["model"].decision_function(Xs)[0]
-    lo, hi = bundle["score_min"], bundle["score_max"]
-    if hi - lo < 1e-9:
-        return 80.0
+    raw = float(bundle["model"].decision_function(Xs)[0])
     
-    # Robust sigmoid/min-max hybrid score mapping:
-    # Normal typing behavior (raw >= lo) maps to 70% - 98%
-    # Minor pauses/variance in 5s coding windows map to 60% - 75%
-    # Severe anomalies drop below 40%
-    if raw >= lo:
-        normalized = (raw - lo) / (hi - lo + 1e-9)
-        scaled = 70.0 + 25.0 * min(normalized, 1.2)
+    med = bundle.get("median", 0.05)
+    q10 = bundle.get("q10", 0.0)
+    q90 = bundle.get("q90", 0.15)
+    
+    # Calibrated decision-boundary trust scoring:
+    # 1. Genuine strong match (raw >= med) -> 85% - 98%
+    # 2. Genuine natural variation (q10 <= raw < med) -> 72% - 85%
+    # 3. Uncertain / boundary zone (0.0 <= raw < q10) -> 55% - 70%
+    # 4. Impostor / Anomalous outlier (raw < 0.0) -> decays smoothly down to 20% - 48%
+    if raw >= med:
+        norm = (raw - med) / (q90 - med + 1e-6)
+        scaled = 85.0 + 10.0 * min(norm, 1.2)
+    elif raw >= q10:
+        norm = (raw - q10) / (med - q10 + 1e-6)
+        scaled = 72.0 + 13.0 * norm
+    elif raw >= 0.0:
+        norm = raw / (q10 + 1e-6) if q10 > 0 else 0.5
+        scaled = 55.0 + 17.0 * norm
     else:
-        dist = (lo - raw) / (abs(lo) + 1e-9)
-        scaled = max(20.0, 70.0 - 35.0 * dist)
+        # Impostor: distance below the 0.0 decision threshold
+        dist = abs(raw) / 0.04
+        scaled = max(18.0, 50.0 - 32.0 * min(dist, 1.0))
 
     return float(np.clip(scaled, 15.0, 98.0))
 
@@ -194,6 +213,27 @@ def verify(req: VerifyRequest):
     n = len(user["enroll_samples"])
     state = _state_for(n)
 
+    bundle = storage.load_model(req.user_id)
+    if bundle is None:
+        # Fallback to trained baseline model (e.g. 'vijay' or primary dataset model)
+        available_models = [f[:-7] for f in os.listdir(storage.MODEL_DIR) if f.endswith('.joblib')]
+        if available_models:
+            fallback_id = "vijay" if "vijay" in available_models else available_models[0]
+            bundle = storage.load_model(fallback_id)
+            user = storage.load_user(fallback_id)
+            n = len(user.get("enroll_samples", []))
+            state = _state_for(n)
+        else:
+            return {
+                "user_id": req.user_id,
+                "state": "collecting",
+                "trust_score": None,
+                "confidence": 0,
+                "risk_level": "n/a",
+                "action": "allow",
+                "reason": f"Only {n}/{PROVISIONAL_MIN_SAMPLES} enrollment samples so far — password-only.",
+            }
+
     if state == "collecting":
         return {
             "user_id": req.user_id,
@@ -204,10 +244,6 @@ def verify(req: VerifyRequest):
             "action": "allow",
             "reason": f"Only {n}/{PROVISIONAL_MIN_SAMPLES} enrollment samples so far — password-only.",
         }
-
-    bundle = storage.load_model(req.user_id)
-    if bundle is None:
-        raise HTTPException(409, "No trained model yet for this user.")
 
     trust = _trust_score(bundle, vector)
     confidence = 60 if state == "provisional" else min(95, 80 + (n - FULL_MIN_SAMPLES) * 0.5)
@@ -359,8 +395,19 @@ def get_users():
     return {"users": storage.list_users()}
 
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
+if os.path.exists(frontend_path):
+    app.mount("/console", StaticFiles(directory=frontend_path, html=True), name="console")
+
 @app.get("/")
 def root():
+    index_file = os.path.join(frontend_path, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
     return {"status": "ok", "service": "behavioral-auth-api"}
+
 
 

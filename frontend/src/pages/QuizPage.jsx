@@ -15,7 +15,12 @@ import {
   Award,
   CheckCircle,
   XCircle,
-  ArrowLeft
+  ArrowLeft,
+  Shield,
+  Lock,
+  StopCircle,
+  Zap,
+  Clock
 } from 'lucide-react';
 
 const QuizPage = () => {
@@ -27,22 +32,17 @@ const QuizPage = () => {
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Live Session State
-  const [inSession, setInSession] = useState(false);
+  // Session lifecycle states: 'LOBBY', 'WAITING', 'ACTIVE', 'ENDED', 'FORBIDDEN'
+  const [sessionState, setSessionState] = useState('LOBBY');
   const [sessionPinInput, setSessionPinInput] = useState('');
-  const [waitingForStart, setWaitingForStart] = useState(false);
+  const [assessmentSessionId, setAssessmentSessionId] = useState(null);
   const [sessionError, setSessionError] = useState('');
+  const [accessDeniedMsg, setAccessDeniedMsg] = useState('');
   const socketRef = useRef(null);
 
-  // Continuous authentication behavior telemetry.
-  // IMPORTANT: this was previously `quiz?.isExam ? 'exam' : 'quiz'` -- since
-  // most quiz documents don't have isExam set, that meant real-time scoring
-  // (and the live_score broadcast to the teacher's proctoring dashboard)
-  // never fired at all, for any quiz, regardless of whether it was being
-  // live-monitored. The thing that actually matters is whether the student
-  // is in an active live-proctored session (inSession), so drive it off that.
-  const trackingContext = (inSession || quiz?.isExam) ? 'exam' : 'quiz';
-  useBehaviorTracking(trackingContext, id);
+  // Continuous authentication behavior telemetry
+  const trackingContext = (sessionState === 'ACTIVE' || quiz?.isExam) ? 'exam' : 'quiz';
+  useBehaviorTracking(trackingContext, id, assessmentSessionId);
   
   // Quiz taking state
   const [selectedAnswers, setSelectedAnswers] = useState({}); // { questionIndex: selectedOptionIndex }
@@ -52,7 +52,7 @@ const QuizPage = () => {
   // Result state
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [gradedResult, setGradedResult] = useState(null);
-  const [correctAnswersList, setCorrectAnswersList] = useState([]); // from grading endpoint
+  const [correctAnswersList, setCorrectAnswersList] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -67,8 +67,22 @@ const QuizPage = () => {
       setQuiz(res.data);
       setQuestions(res.data.questions || []);
       setTimeRemaining((res.data.durationMinutes || 30) * 60);
+
+      // If quiz is not an exam, default to ACTIVE state
+      if (!res.data.isExam) {
+        setSessionState('ACTIVE');
+      }
     } catch (err) {
-      console.error(err);
+      if (err.response?.status === 403) {
+        if (err.response?.data?.requiresSessionPin) {
+          setSessionState('LOBBY');
+        } else {
+          setSessionState('FORBIDDEN');
+          setAccessDeniedMsg(err.response?.data?.message || 'Join the active assessment session using the session PIN provided by your instructor.');
+        }
+      } else {
+        console.error(err);
+      }
     } finally {
       setLoading(false);
     }
@@ -83,22 +97,30 @@ const QuizPage = () => {
   }, [id]);
 
   const handleJoinSession = () => {
-    if (!sessionPinInput) return;
+    const cleanPin = sessionPinInput.trim();
+    if (!cleanPin) return;
     setSessionError('');
     
-    socketRef.current = io('http://localhost:5000', { transports: ['websocket'] });
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+
+    const socketUrl = `${window.location.protocol}//${window.location.hostname}:5000`;
+    socketRef.current = io(socketUrl, { transports: ['websocket', 'polling'] });
     const socket = socketRef.current;
     
-    socket.emit('join-session', { pin: sessionPinInput, student: { id: user._id, name: user.name, email: user.email } });
+    socket.emit('join-session', { pin: cleanPin, student: { id: user._id, name: user.name, email: user.email } });
     
-    socket.on('join-success', () => {
-      setInSession(true);
-      setWaitingForStart(true);
+    socket.on('join-success', (data) => {
+      setSessionState('WAITING');
+      if (data?.assessmentSessionId) setAssessmentSessionId(data.assessmentSessionId);
+      fetchQuizData();
     });
     
-    socket.on('exam-started', () => {
-      setInSession(true);
-      setWaitingForStart(false);
+    socket.on('exam-started', (data) => {
+      setSessionState('ACTIVE');
+      if (data?.assessmentSessionId) setAssessmentSessionId(data.assessmentSessionId);
+      fetchQuizData();
     });
     
     socket.on('join-error', (msg) => {
@@ -107,14 +129,13 @@ const QuizPage = () => {
     });
     
     socket.on('session-ended', () => {
-      // Force submit if teacher ends session
-      handleAutoSubmit();
+      setSessionState('ENDED');
     });
   };
 
   // Timer loop
   useEffect(() => {
-    if (loading || quizCompleted || timeRemaining <= 0) return;
+    if (loading || quizCompleted || timeRemaining <= 0 || sessionState !== 'ACTIVE') return;
 
     timerRef.current = setInterval(() => {
       setTimeRemaining(prev => {
@@ -128,9 +149,10 @@ const QuizPage = () => {
     }, 1000);
 
     return () => clearInterval(timerRef.current);
-  }, [loading, quizCompleted, timeRemaining]);
+  }, [loading, quizCompleted, timeRemaining, sessionState]);
 
   const handleOptionSelect = (optionIdx) => {
+    if (sessionState === 'ENDED' || quizCompleted || submitting) return;
     setSelectedAnswers(prev => ({
       ...prev,
       [currentIndex]: optionIdx
@@ -150,7 +172,6 @@ const QuizPage = () => {
     return 'unanswered';
   };
 
-  // Convert timer seconds to MM:SS
   const formatTime = (secs) => {
     const mins = Math.floor(secs / 60);
     const remainingSecs = secs % 60;
@@ -158,21 +179,20 @@ const QuizPage = () => {
   };
 
   const handleAutoSubmit = () => {
-    alert('Time has expired! Your quiz will be automatically submitted.');
+    alert('Time has expired! Your quiz responses will be automatically submitted.');
     submitAnswers();
   };
 
   const submitAnswers = async () => {
+    if (submitting || quizCompleted) return;
     setShowConfirmModal(false);
     setSubmitting(true);
     
-    // Map selectedAnswers state to the backend format: [{ questionIndex, selectedAnswerIndex }]
     const formattedAnswers = Object.entries(selectedAnswers).map(([qIdx, optIdx]) => ({
       questionIndex: parseInt(qIdx),
       selectedAnswerIndex: optIdx
     }));
 
-    // Ensure unanswered questions are represented
     questions.forEach((_, idx) => {
       if (selectedAnswers[idx] === undefined) {
         formattedAnswers.push({
@@ -206,57 +226,100 @@ const QuizPage = () => {
     );
   }
 
-  // Pre-quiz Waiting Room (if it's an exam, require live session)
-  if (quiz?.isExam && (!inSession || waitingForStart)) {
+  // 1. FORBIDDEN ACCESS SCREEN
+  if (sessionState === 'FORBIDDEN') {
     return (
       <Layout>
-        <div className="max-w-md mx-auto mt-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center shadow-xl">
-          <div className="w-16 h-16 bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 rounded-full flex items-center justify-center mx-auto mb-6">
+        <div className="max-w-md mx-auto mt-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center shadow-xl space-y-4">
+          <div className="w-16 h-16 bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-full flex items-center justify-center mx-auto mb-2">
+            <Lock size={32} />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Assessment Access Locked</h2>
+          <p className="text-slate-500 text-sm leading-relaxed">{accessDeniedMsg}</p>
+          <div className="pt-4">
+            <Link
+              to="/dashboard"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-slate-900 dark:bg-slate-800 text-white font-bold text-sm rounded-xl hover:bg-slate-800 transition-all"
+            >
+              <ArrowLeft size={16} />
+              <span>Return to Dashboard</span>
+            </Link>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // 2. QUIZ LOBBY (PIN Input or Waiting Room)
+  if (quiz?.isExam && (sessionState === 'LOBBY' || sessionState === 'WAITING')) {
+    return (
+      <Layout>
+        <div className="max-w-md mx-auto mt-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center shadow-xl space-y-4">
+          <div className="w-16 h-16 bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 rounded-full flex items-center justify-center mx-auto mb-2">
             <Timer size={32} />
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Live Exam Lobby</h2>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Live Quiz Lobby</h2>
           
-          {!inSession ? (
+          {sessionState === 'LOBBY' ? (
             <>
-              <p className="text-slate-500 mb-6">Enter the 6-digit PIN provided by your teacher to join the secure exam session.</p>
+              <p className="text-slate-500 text-sm">Enter the 6-digit PIN generated on the Teacher Proctor Dashboard to join.</p>
               <input
                 type="text"
                 placeholder="000000"
                 maxLength={6}
                 value={sessionPinInput}
                 onChange={e => setSessionPinInput(e.target.value)}
-                className="w-full text-center text-3xl tracking-widest font-mono p-4 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-brand-500 outline-none mb-4"
+                className="w-full text-center text-3xl tracking-widest font-mono p-4 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-brand-500 outline-none"
               />
-              {sessionError && <p className="text-rose-500 text-sm mb-4 font-medium">{sessionError}</p>}
+              {sessionError && <p className="text-rose-500 text-sm font-medium">{sessionError}</p>}
+              
               <button
                 onClick={handleJoinSession}
-                className="w-full py-4 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all"
+                className="w-full py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all shadow-md"
               >
-                Join Session
+                Join Proctor Session
               </button>
             </>
           ) : (
-            <>
-              <p className="text-slate-500 mb-6">You have successfully joined the session. Please wait for the teacher to launch the exam.</p>
-              <div className="flex justify-center gap-2 mb-6">
-                <div className="w-3 h-3 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                <div className="w-3 h-3 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                <div className="w-3 h-3 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            <div className="space-y-4">
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs font-bold">
+                ✓ Successfully authorized for session #{sessionPinInput}
               </div>
-            </>
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl text-xs space-y-1 text-left border border-slate-100 dark:border-slate-800">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Status:</span>
+                  <span className="font-bold text-amber-600 dark:text-amber-400">WAITING FOR INSTRUCTOR</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Authorization:</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">Verified ✓</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Behaviour Monitoring:</span>
+                  <span className="font-bold text-indigo-600 dark:text-indigo-400">Ready</span>
+                </div>
+              </div>
+              <p className="text-slate-500 text-xs">
+                Your assessment will begin automatically when the instructor starts the session.
+              </p>
+              <div className="flex justify-center gap-2 py-2">
+                <div className="w-2.5 h-2.5 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2.5 h-2.5 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2.5 h-2.5 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
+            </div>
           )}
         </div>
       </Layout>
     );
   }
 
-  // Render Post-Submission results screen
+  // 3. POST-SUBMISSION RESULTS SCREEN
   if (quizCompleted && gradedResult) {
     return (
       <Layout>
         <div className="space-y-6 max-w-3xl mx-auto">
           
-          {/* Grade Summary header */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center space-y-4 shadow-xl">
             <Award size={48} className="text-brand-600 mx-auto" />
             <div>
@@ -291,7 +354,6 @@ const QuizPage = () => {
             </div>
           </div>
 
-          {/* Graded Question Review */}
           <div className="space-y-4">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">Graded Answer Review</h3>
             {questions.map((question, qIdx) => {
@@ -306,7 +368,7 @@ const QuizPage = () => {
                   className={`p-6 rounded-2xl border bg-white dark:bg-slate-900 shadow-sm space-y-4 ${
                     isCorrect 
                       ? 'border-emerald-200 dark:border-emerald-950' 
-                      : 'border-rose-205 dark:border-rose-950'
+                      : 'border-rose-200 dark:border-rose-950'
                   }`}
                 >
                   <div className="flex justify-between items-start gap-4">
@@ -358,33 +420,68 @@ const QuizPage = () => {
     );
   }
 
-  // Active quiz question display
+  // 4. ACTIVE / ENDED QUIZ WORKSPACE
   const currentQuestion = questions[currentIndex];
 
   return (
     <Layout>
       <div className="space-y-4 flex flex-col h-[calc(100vh-10rem)]">
         
-        {/* Top Header: Quiz Info & Timer */}
-        <div className="flex justify-between items-center bg-white dark:bg-slate-900 border p-4 rounded-2xl shadow-sm">
+        {/* Top Header: Quiz Info, Security Badge & Timer */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-sm gap-4">
           <div>
             <h2 className="font-extrabold text-slate-900 dark:text-white">{quiz?.title}</h2>
             <p className="text-xs text-slate-400 mt-0.5">{quiz?.description}</p>
           </div>
           
-          <div className="flex items-center gap-2 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-450 px-4 py-2.5 rounded-2xl font-mono font-bold text-sm shadow-sm">
-            <Timer size={18} className="animate-pulse" />
-            <span>Time Left: {formatTime(timeRemaining)}</span>
+          <div className="flex flex-wrap items-center gap-4 self-end md:self-auto">
+            <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300">
+              <Shield size={14} className="text-emerald-600" />
+              <span>🔐 Secure Assessment</span>
+              <span className="mx-1 text-slate-300">|</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Behaviour Monitoring Active</span>
+            </div>
+
+            {sessionState === 'ACTIVE' && (
+              <div className="flex items-center gap-2 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-450 px-4 py-2 rounded-xl font-mono font-bold text-xs shadow-sm">
+                <Timer size={16} className="animate-pulse" />
+                <span>Time Left: {formatTime(timeRemaining)}</span>
+              </div>
+            )}
+
+            {sessionState === 'ENDED' && (
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-rose-100 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 rounded-xl text-xs font-bold text-rose-700 dark:text-rose-300">
+                <StopCircle size={14} />
+                <span>Assessment Ended</span>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Ended Session Banner */}
+        {sessionState === 'ENDED' && (
+          <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-2xl flex justify-between items-center text-rose-900 dark:text-rose-200 text-xs font-bold">
+            <div className="flex items-center gap-2">
+              <StopCircle size={16} className="text-rose-600" />
+              <span>Your instructor has ended this assessment session. Option selection and submissions are now locked.</span>
+            </div>
+            <Link
+              to="/dashboard"
+              className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-all"
+            >
+              Return to Dashboard
+            </Link>
+          </div>
+        )}
 
         {/* Workspace: Side Navigator + MCQ Body */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
           
           {/* Left Sidebar Matrix */}
-          <div className="lg:col-span-3 bg-white dark:bg-slate-900 border p-5 rounded-2xl shadow-sm flex flex-col justify-between overflow-hidden">
+          <div className="lg:col-span-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm flex flex-col justify-between overflow-hidden">
             <div className="space-y-4">
-              <h3 className="font-bold text-slate-900 dark:text-white text-xs border-b pb-2">Questions Status</h3>
+              <h3 className="font-bold text-slate-900 dark:text-white text-xs border-b border-slate-100 dark:border-slate-800 pb-2">Questions Status</h3>
               
               <div className="grid grid-cols-4 gap-2.5 max-h-56 overflow-y-auto pr-1">
                 {questions.map((_, idx) => {
@@ -408,7 +505,7 @@ const QuizPage = () => {
             </div>
 
             {/* Legend summary */}
-            <div className="space-y-2 pt-4 border-t text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            <div className="space-y-2 pt-4 border-t border-slate-100 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
               <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block"></span> Answered</div>
               <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-amber-500 inline-block"></span> Flagged for Review</div>
               <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-slate-200 dark:bg-slate-800 inline-block"></span> Unanswered</div>
@@ -416,10 +513,10 @@ const QuizPage = () => {
           </div>
 
           {/* Center MCQ Panel */}
-          <div className="lg:col-span-9 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm flex flex-col justify-between overflow-hidden">
+          <div className="lg:col-span-9 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm flex flex-col justify-between overflow-hidden">
             
             {/* Question Header */}
-            <div className="px-8 py-5 border-b flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="px-8 py-5 border-b border-slate-150 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
               <span className="text-xs font-bold text-slate-400">
                 Question {currentIndex + 1} of {questions.length}
               </span>
@@ -449,7 +546,8 @@ const QuizPage = () => {
                     <button
                       key={optIdx}
                       onClick={() => handleOptionSelect(optIdx)}
-                      className={`p-5 rounded-2xl border text-left text-xs font-semibold flex items-center justify-between transition-all hover:shadow-sm ${
+                      disabled={sessionState === 'ENDED' || quizCompleted || submitting}
+                      className={`p-5 rounded-2xl border text-left text-xs font-semibold flex items-center justify-between transition-all hover:shadow-sm disabled:opacity-60 ${
                         isSelected
                           ? 'border-brand-500 bg-brand-50/40 text-brand-700 dark:text-brand-350 ring-2 ring-brand-500/20'
                           : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850/50'
@@ -470,7 +568,7 @@ const QuizPage = () => {
             </div>
 
             {/* Navigation Footer */}
-            <div className="px-8 py-5 border-t bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center">
+            <div className="px-8 py-5 border-t border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center">
               <button
                 onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
                 disabled={currentIndex === 0}
@@ -491,7 +589,8 @@ const QuizPage = () => {
               ) : (
                 <button
                   onClick={() => setShowConfirmModal(true)}
-                  className="flex items-center gap-1.5 text-xs font-bold bg-brand-650 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl shadow-md shadow-brand-500/10 transition-all cursor-pointer"
+                  disabled={sessionState === 'ENDED' || quizCompleted || submitting}
+                  className="flex items-center gap-1.5 text-xs font-bold bg-brand-650 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl shadow-md shadow-brand-500/10 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   <CheckSquare size={16} />
                   <span>Submit Quiz</span>
@@ -527,7 +626,7 @@ const QuizPage = () => {
               <button
                 onClick={submitAnswers}
                 disabled={submitting}
-                className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
+                className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 disabled:opacity-50"
               >
                 {submitting ? 'Submitting...' : 'Yes, Submit'}
               </button>

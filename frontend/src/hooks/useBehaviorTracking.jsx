@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 
-export const useBehaviorTracking = (context = 'general', examId = null) => {
+export const useBehaviorTracking = (context = 'general', examId = null, assessmentSessionId = null) => {
   const { user, token } = useAuth();
   const eventsBuffer = useRef([]);
   const sessionId = useRef(
@@ -10,11 +10,77 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
   );
   const windowTimer = useRef(null);
   const windowStartTime = useRef(Date.now());
-  const pointerTypes = useRef(new Set()); // track pointer types used in window
+  const pointerTypes = useRef(new Set());
+  // Keep a stable ref to sendWindow so closures registered early can call it
+  const sendWindowRef = useRef(null);
 
   useEffect(() => {
     if (!user || !token) return;
 
+    // ─── SEND FUNCTION (defined first so all handlers below can reference it) ─
+    const sendWindow = async (force = false) => {
+      const events = [...eventsBuffer.current];
+      const hasSecurityEvent = events.some(
+        ev => ev.type === 'paste' || (ev.type === 'visibilitychange' && ev.hidden)
+      );
+
+      if (!force && !hasSecurityEvent && events.length === 0) {
+        return; // empty buffer, nothing to send
+      }
+
+      eventsBuffer.current = [];
+      const startTime = windowStartTime.current;
+      const endTime = Date.now();
+      windowStartTime.current = endTime;
+
+      if (events.length === 0) return;
+
+      const tabBlurCount = events.filter(e => e.type === 'visibilitychange' && e.hidden).length;
+      const pasteCount = events.filter(e => e.type === 'paste').length;
+      console.log(`[BehaviorTracking] Sending window: ${events.length} events, tabBlurCount=${tabBlurCount}, pasteCount=${pasteCount}, force=${force}`);
+
+      try {
+        const isExam = context === 'exam';
+        const endpoint = isExam ? '/api/behavior/score' : '/api/behavior/window';
+
+        const deviceInfo = {
+          userAgent: navigator.userAgent,
+          screenWidth: window.screen.width,
+          screenHeight: window.screen.height,
+          pointerTypes: Array.from(pointerTypes.current)
+        };
+        pointerTypes.current.clear();
+
+        const payload = {
+          events,
+          session: sessionId.current,
+          context,
+          windowStartTime: startTime,
+          windowEndTime: endTime,
+          deviceInfo
+        };
+
+        if (isExam) {
+          payload.examId = examId;
+          payload.studentId = user._id;
+          if (assessmentSessionId) {
+            payload.assessmentSessionId = assessmentSessionId;
+          }
+        }
+
+        const res = await axios.post(endpoint, payload, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        console.log(`[BehaviorTracking] Server response:`, res.data);
+      } catch (error) {
+        console.error('[BehaviorTracking] Telemetry send failed:', error?.response?.data || error.message);
+      }
+    };
+
+    // Store in ref so event handlers registered before sendWindow reference it
+    sendWindowRef.current = sendWindow;
+
+    // ─── MOUSE / KEYBOARD EVENTS ─────────────────────────────────────────────
     const handleEvent = (e) => {
       const eventData = {
         type: e.type,
@@ -23,104 +89,126 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
 
       if (e.type === 'keydown' || e.type === 'keyup') {
         eventData.key = e.key;
+
+        // Fallback for Ctrl+V or Cmd+V paste shortcut
+        if (e.type === 'keydown' && (e.key === 'v' || e.key === 'V') && (e.ctrlKey || e.metaKey)) {
+          const now = Date.now();
+          const lastEvent = eventsBuffer.current[eventsBuffer.current.length - 1];
+          if (!lastEvent || lastEvent.type !== 'paste' || (now - lastEvent.timestamp > 300)) {
+            eventsBuffer.current.push({
+              type: 'paste',
+              timestamp: now,
+              length: 50
+            });
+            console.log('[BehaviorTracking] PASTE detected via Ctrl+V / Cmd+V shortcut');
+            setTimeout(() => sendWindowRef.current?.(true), 10);
+          }
+        }
       } else if (e.type === 'mousemove' || e.type === 'pointermove') {
-        eventData.type = 'mousemove'; // normalize
+        eventData.type = 'mousemove';
         eventData.x = e.clientX;
         eventData.y = e.clientY;
         if (e.pointerType) pointerTypes.current.add(e.pointerType);
-      } else if (e.type === 'visibilitychange') {
-        eventData.hidden = document.hidden;
       }
 
       eventsBuffer.current.push(eventData);
     };
 
-    // Throttle mousemove
     let lastMouseMove = 0;
     const throttledMouseMove = (e) => {
       const now = Date.now();
-      if (now - lastMouseMove > 100) { // 100ms throttle
+      if (now - lastMouseMove > 100) {
         handleEvent(e);
         lastMouseMove = now;
       }
     };
 
+    const handleClick = (e) => {
+      eventsBuffer.current.push({ type: 'click', timestamp: Date.now() });
+      if (e.pointerType) pointerTypes.current.add(e.pointerType);
+    };
+
     window.addEventListener('keydown', handleEvent);
     window.addEventListener('keyup', handleEvent);
-    // Use pointermove if supported, otherwise fallback to mousemove
     if (window.PointerEvent) {
       window.addEventListener('pointermove', throttledMouseMove);
     } else {
       window.addEventListener('mousemove', throttledMouseMove);
     }
-    window.addEventListener('click', (e) => {
-      handleEvent(e);
-      if (e.pointerType) pointerTypes.current.add(e.pointerType);
-    });
-    document.addEventListener('visibilitychange', handleEvent);
+    window.addEventListener('click', handleClick);
 
-    // FIX: was `eventsRef.current` — that ref doesn't exist, this threw
-    // a ReferenceError on every paste event and silently dropped it.
+    // ─── PASTE DETECTION ─────────────────────────────────────────────────────
     const handlePaste = (e) => {
+      // Ignore paste inside the PIN input box
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.closest?.('.session-pin-input'))) {
+        return;
+      }
+
+      const lastEvent = eventsBuffer.current[eventsBuffer.current.length - 1];
+      const now = Date.now();
+      // Deduplicate within 300ms
+      if (lastEvent && lastEvent.type === 'paste' && (now - lastEvent.timestamp < 300)) {
+        return;
+      }
+
+      const pastedText = e.clipboardData?.getData('text') || '';
       eventsBuffer.current.push({
         type: 'paste',
-        timestamp: Date.now(),
-        length: e.clipboardData?.getData('text')?.length || 0
+        timestamp: now,
+        length: pastedText.length || 50
       });
+
+      console.log('[BehaviorTracking] PASTE detected, length:', pastedText.length || 50);
+      // Use ref so this closure always calls the latest sendWindow
+      setTimeout(() => sendWindowRef.current?.(true), 10);
     };
-    document.addEventListener('paste', handlePaste);
 
-    const sendWindow = async () => {
-      const events = [...eventsBuffer.current];
-      eventsBuffer.current = [];
-      const startTime = windowStartTime.current;
-      const endTime = Date.now();
-      windowStartTime.current = endTime;
+    // Capture phase so Monaco Editor internal handlers don't swallow it
+    document.addEventListener('paste', handlePaste, true);
 
-      if (events.length > 10) {
-        try {
-          const isExam = context === 'exam';
-          const endpoint = isExam ? '/api/behavior/score' : '/api/behavior/window';
+    // ─── TAB SWITCH / WINDOW BLUR DETECTION ──────────────────────────────────
+    const recordTabBlur = (source) => {
+      const lastEvent = eventsBuffer.current[eventsBuffer.current.length - 1];
+      const now = Date.now();
+      // Debounce: both blur + visibilitychange fire together; only record once per 300ms
+      if (
+        lastEvent &&
+        lastEvent.type === 'visibilitychange' &&
+        lastEvent.hidden &&
+        now - lastEvent.timestamp < 300
+      ) {
+        return;
+      }
 
-          const deviceInfo = {
-            userAgent: navigator.userAgent,
-            screenWidth: window.screen.width,
-            screenHeight: window.screen.height,
-            pointerTypes: Array.from(pointerTypes.current)
-          };
-          pointerTypes.current.clear();
+      eventsBuffer.current.push({
+        type: 'visibilitychange',
+        hidden: true,
+        source,
+        timestamp: now
+      });
 
-          const payload = {
-            events,
-            session: sessionId.current,
-            context,
-            windowStartTime: startTime,
-            windowEndTime: endTime,
-            deviceInfo
-          };
+      console.log(`[BehaviorTracking] TAB/WINDOW BLUR detected (source: ${source}), forcing send`);
+      // Use ref so this closure always calls the latest sendWindow
+      setTimeout(() => sendWindowRef.current?.(true), 10);
+    };
 
-          if (isExam) {
-            payload.examId = examId;
-            // Use user._id as studentId to match what backend expects in scoreWindow,
-            // although backend auth middleware also sets req.user.
-            payload.studentId = user._id;
-          }
-
-          await axios.post(
-            endpoint,
-            payload,
-            {
-              headers: { Authorization: `Bearer ${token}` }
-            }
-          );
-        } catch (error) {
-          console.error('Behavior telemetry failed:', error);
-        }
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        recordTabBlur('visibilitychange');
       }
     };
 
-    windowTimer.current = setInterval(sendWindow, 5000);
+    const handleWindowBlur = () => {
+      recordTabBlur('blur');
+    };
 
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+
+    // ─── PERIODIC SEND ───────────────────────────────────────────────────────
+    windowTimer.current = setInterval(() => sendWindowRef.current?.(false), 5000);
+
+    // ─── CLEANUP ─────────────────────────────────────────────────────────────
     return () => {
       window.removeEventListener('keydown', handleEvent);
       window.removeEventListener('keyup', handleEvent);
@@ -129,9 +217,10 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
       } else {
         window.removeEventListener('mousemove', throttledMouseMove);
       }
-      window.removeEventListener('click', handleEvent);
-      document.removeEventListener('visibilitychange', handleEvent);
-      document.removeEventListener('paste', handlePaste);
+      window.removeEventListener('click', handleClick);
+      window.removeEventListener('blur', handleWindowBlur);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('paste', handlePaste, true);
       if (windowTimer.current) {
         clearInterval(windowTimer.current);
       }

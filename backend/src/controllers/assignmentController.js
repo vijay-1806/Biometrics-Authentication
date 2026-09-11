@@ -2,6 +2,7 @@ const Assignment = require('../models/Assignment');
 const Submission = require('../models/Submission');
 const Course = require('../models/Course');
 const { runCode } = require('../utils/codeRunner');
+const { isStudentAuthorizedForExam } = require('../socketHandler');
 
 // @desc    Create a coding assignment
 // @route   POST /api/assignments
@@ -50,6 +51,17 @@ const getAssignmentById = async (req, res) => {
       return res.status(404).json({ message: 'Assignment not found' });
     }
 
+    // Phase 5: Enforce active session authorization for students
+    if (req.user && req.user.role === 'student') {
+      const authCheck = isStudentAuthorizedForExam(req.user._id, req.params.id);
+      if (!authCheck.authorized) {
+        return res.status(403).json({ 
+          message: 'Active assessment session required. Please join using the 6-digit PIN on the lobby screen.',
+          requiresSessionPin: true 
+        });
+      }
+    }
+
     res.json(assignment);
   } catch (error) {
     console.error(error);
@@ -67,6 +79,13 @@ const runAssignmentCode = async (req, res) => {
 
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (req.user && req.user.role === 'student') {
+      const authCheck = isStudentAuthorizedForExam(req.user._id, req.params.id);
+      if (!authCheck.authorized) {
+        return res.status(403).json({ message: 'Active assessment session required to run code.' });
+      }
     }
 
     if (!code) {
@@ -92,6 +111,13 @@ const submitAssignment = async (req, res) => {
 
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (req.user && req.user.role === 'student') {
+      const authCheck = isStudentAuthorizedForExam(req.user._id, req.params.id);
+      if (!authCheck.authorized) {
+        return res.status(403).json({ message: 'Active assessment session required to submit code.' });
+      }
     }
 
     if (!code) {

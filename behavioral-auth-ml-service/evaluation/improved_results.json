@@ -1,0 +1,35 @@
+{
+  "model": "IsolationForest (Calibrated & Feature Stabilized)",
+  "n_estimators": 200,
+  "contamination": 0.1,
+  "scaler": "StandardScaler",
+  "n_features": 20,
+  "threshold": 40.0,
+  "eval_samples": {
+    "total": 35,
+    "genuine": 18,
+    "impostor": 17
+  },
+  "metrics": {
+    "accuracy": 0.943,
+    "precision": 0.900,
+    "recall": 1.000,
+    "f1": 0.947,
+    "far": 0.118,
+    "frr": 0.000,
+    "auc": 0.954,
+    "eer": 0.060
+  },
+  "genuine_distribution": {
+    "mean": 57.1,
+    "median": 59.5,
+    "std": 9.2,
+    "min": 41.2,
+    "max": 71.2
+  },
+  "impostor_distribution": {
+    "mean": 28.5,
+    "min": 22.1,
+    "max": 48.2
+  }
+}

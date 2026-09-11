@@ -74,7 +74,7 @@ def extract_features(events, reference_digraphs):
         # approximate flight as gap between consecutive key-down times
         # minus nothing extra -- simplest robust proxy across browsers
         gap = cur_down_t - prev_down_t
-        if gap >= 0:
+        if 0 <= gap <= 1000:  # Filter out inter-burst thinking pauses (>1000ms)
             flights.append(gap)
 
     # --- backspace rate ---
@@ -82,13 +82,13 @@ def extract_features(events, reference_digraphs):
     backspaces = sum(1 for k, _ in down_sequence if k.lower() == "backspace")
     backspace_rate = backspaces / total_keys if total_keys else 0.0
 
-    # --- typing speed (WPM), standard 5-chars-per-word convention ---
-    total_time_ms = down_sequence[-1][1] - down_sequence[0][1]
-    total_time_min = max(total_time_ms / 60000.0, 1e-6)
+    # --- typing speed (WPM), based on active typing time (excluding thinking pauses) ---
+    active_typing_ms = sum(flights) if flights else max(1.0, down_sequence[-1][1] - down_sequence[0][1])
+    active_typing_min = max(active_typing_ms / 60000.0, 1e-4)
     printable_chars = sum(
         1 for k, _ in down_sequence if len(k) == 1 or k.lower() == "space"
     )
-    wpm = (printable_chars / 5.0) / total_time_min
+    wpm = (printable_chars / 5.0) / active_typing_min
 
     # --- digraph latencies: down(n) -> down(n+1) for specific letter pairs ---
     digraph_latencies = {d: [] for d in reference_digraphs}
@@ -99,11 +99,15 @@ def extract_features(events, reference_digraphs):
         if pair in digraph_latencies:
             digraph_latencies[pair].append(cur_t - prev_t)
 
+    # Apply robust variance stabilization for short sample windows
+    dwell_std = float(np.std(dwells)) if dwells and len(dwells) > 1 else 0.0
+    flight_std = float(np.std(flights)) if flights and len(flights) > 1 else 0.0
+
     vector = [
         float(np.mean(dwells)) if dwells else 0.0,
-        float(np.std(dwells)) if dwells else 0.0,
+        min(dwell_std, 300.0),  # robust upper cap on dwell variance
         float(np.mean(flights)) if flights else 0.0,
-        float(np.std(flights)) if flights else 0.0,
+        min(flight_std, 500.0), # robust upper cap on flight variance
         float(wpm),
         float(backspace_rate),
     ]

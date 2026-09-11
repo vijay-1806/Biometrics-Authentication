@@ -17,10 +17,18 @@ const protect = async (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecretlmskey12345');
 
       // Get user from the token
-      req.user = await User.findById(decoded.id).select('-password');
+      req.user = await User.findById(decoded.id);
       
       if (!req.user) {
         return res.status(401).json({ message: 'Not authorized, user not found' });
+      }
+
+      // Single active session enforcement: if account logged in from another device (or token lacks sessionId), invalidate previous session
+      if (req.user.sessionId && decoded.sessionId !== req.user.sessionId) {
+        return res.status(401).json({ 
+          message: 'Account logged in from another device', 
+          sessionExpired: true 
+        });
       }
 
       next();

@@ -16,7 +16,12 @@ import {
   Info,
   History,
   FileCode,
-  Timer
+  Timer,
+  Shield,
+  Lock,
+  StopCircle,
+  Zap,
+  Clock
 } from 'lucide-react';
 
 const CodingPractice = () => {
@@ -24,15 +29,19 @@ const CodingPractice = () => {
   const { user, theme } = useAuth();
   const navigate = useNavigate();
 
-  // Socket session state (PIN prompt required to join teacher session)
-  const [inSession, setInSession] = useState(false);
-  const [waitingForStart, setWaitingForStart] = useState(false);
+  // Session lifecycle states: 'LOBBY', 'WAITING', 'ACTIVE', 'ENDED', 'FORBIDDEN'
+  const [sessionState, setSessionState] = useState('LOBBY');
   const [sessionPinInput, setSessionPinInput] = useState('');
+  const [assessmentSessionId, setAssessmentSessionId] = useState(null);
   const [sessionError, setSessionError] = useState('');
+  const [accessDeniedMsg, setAccessDeniedMsg] = useState('');
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
   const socketRef = useRef(null);
+  const timerRef = useRef(null);
 
   // Continuous authentication behavior telemetry
-  useBehaviorTracking('exam', id);
+  useBehaviorTracking('exam', id, assessmentSessionId);
 
   const [assignment, setAssignment] = useState(null);
   const [code, setCode] = useState('');
@@ -44,13 +53,14 @@ const CodingPractice = () => {
   const [submitting, setSubmitting] = useState(false);
   
   // Console Outputs
-  const [consoleOutput, setConsoleOutput] = useState('Console initialized. Press "Run Code" to evaluate your solution.');
+  const [consoleOutput, setConsoleOutput] = useState('Console initialized. Press "Run" to evaluate your solution against test cases.');
   const [runResults, setRunResults] = useState(null);
   const [status, setStatus] = useState(''); // 'pass', 'fail', 'compile_error', 'none'
   
   const [activeLeftTab, setActiveLeftTab] = useState('description');
   const [loading, setLoading] = useState(true);
 
+  // Fetch assignment & verify backend access authorization
   const fetchAssignmentData = async () => {
     try {
       setLoading(true);
@@ -64,8 +74,16 @@ const CodingPractice = () => {
       setLanguage(assignmentRes.data.language || 'javascript');
       setSubmissions(submissionsRes.data);
     } catch (err) {
-      console.error(err);
-      setConsoleOutput('Error: Failed to load assignment details.');
+      if (err.response?.status === 403) {
+        if (err.response?.data?.requiresSessionPin) {
+          setSessionState('LOBBY');
+        } else {
+          setSessionState('FORBIDDEN');
+          setAccessDeniedMsg(err.response?.data?.message || 'Join the active assessment session using the session PIN provided by your instructor.');
+        }
+      } else {
+        setConsoleOutput('Error: Failed to load assignment details.');
+      }
     } finally {
       setLoading(false);
     }
@@ -75,26 +93,49 @@ const CodingPractice = () => {
     fetchAssignmentData();
     return () => {
       if (socketRef.current) socketRef.current.disconnect();
+      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [id]);
 
+  // Session elapsed timer effect
+  useEffect(() => {
+    if (sessionState === 'ACTIVE') {
+      timerRef.current = setInterval(() => {
+        setElapsedSeconds(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [sessionState]);
+
   const handleJoinSession = () => {
-    if (!sessionPinInput) return;
+    const cleanPin = sessionPinInput.trim();
+    if (!cleanPin) return;
     setSessionError('');
     
-    socketRef.current = io('http://localhost:5000', { transports: ['websocket', 'polling'] });
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+
+    const socketUrl = `${window.location.protocol}//${window.location.hostname}:5000`;
+    socketRef.current = io(socketUrl, { transports: ['websocket', 'polling'] });
     const socket = socketRef.current;
     
-    socket.emit('join-session', { pin: sessionPinInput, student: { id: user._id, name: user.name, email: user.email } });
+    socket.emit('join-session', { pin: cleanPin, student: { id: user._id, name: user.name, email: user.email } });
     
-    socket.on('join-success', () => {
-      setInSession(true);
-      setWaitingForStart(true);
+    socket.on('join-success', (data) => {
+      setSessionState('WAITING');
+      if (data?.assessmentSessionId) setAssessmentSessionId(data.assessmentSessionId);
+      fetchAssignmentData();
     });
     
-    socket.on('exam-started', () => {
-      setInSession(true);
-      setWaitingForStart(false);
+    socket.on('exam-started', (data) => {
+      setSessionState('ACTIVE');
+      if (data?.assessmentSessionId) setAssessmentSessionId(data.assessmentSessionId);
+      fetchAssignmentData();
     });
     
     socket.on('join-error', (msg) => {
@@ -103,17 +144,18 @@ const CodingPractice = () => {
     });
     
     socket.on('session-ended', () => {
-      navigate(`/courses/${assignment?.course}`);
+      setSessionState('ENDED');
     });
   };
 
-  const handleBypassSession = () => {
-    setInSession(true);
-    setWaitingForStart(false);
+  const formatTimer = (sec) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
   const handleRunCode = async () => {
-    if (!code) return;
+    if (!code || sessionState === 'ENDED') return;
     try {
       setRunning(true);
       setConsoleOutput('Compiling and running code against test cases...\n');
@@ -134,7 +176,7 @@ const CodingPractice = () => {
   };
 
   const handleSubmitCode = async () => {
-    if (!code) return;
+    if (!code || sessionState === 'ENDED') return;
     try {
       setSubmitting(true);
       setConsoleOutput('Submitting solution to classroom records...\n');
@@ -169,8 +211,32 @@ const CodingPractice = () => {
     );
   }
 
-  // Pre-assignment Waiting Room
-  if (!inSession || waitingForStart) {
+  // 1. FORBIDDEN ACCESS SCREEN
+  if (sessionState === 'FORBIDDEN') {
+    return (
+      <Layout>
+        <div className="max-w-md mx-auto mt-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center shadow-xl space-y-4">
+          <div className="w-16 h-16 bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-full flex items-center justify-center mx-auto mb-2">
+            <Lock size={32} />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Assessment Access Locked</h2>
+          <p className="text-slate-500 text-sm leading-relaxed">{accessDeniedMsg}</p>
+          <div className="pt-4">
+            <Link
+              to="/dashboard"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-slate-900 dark:bg-slate-800 text-white font-bold text-sm rounded-xl hover:bg-slate-800 transition-all"
+            >
+              <ArrowLeft size={16} />
+              <span>Return to Dashboard</span>
+            </Link>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // 2. SESSION LOBBY (PIN Input or Waiting Room)
+  if (sessionState === 'LOBBY' || sessionState === 'WAITING') {
     return (
       <Layout>
         <div className="max-w-md mx-auto mt-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center shadow-xl space-y-4">
@@ -179,7 +245,7 @@ const CodingPractice = () => {
           </div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Live Exam Lobby</h2>
           
-          {!inSession ? (
+          {sessionState === 'LOBBY' ? (
             <>
               <p className="text-slate-500 text-sm">Enter the 6-digit PIN generated on the Teacher Proctor Dashboard to join.</p>
               <input
@@ -198,49 +264,48 @@ const CodingPractice = () => {
               >
                 Join Proctor Session
               </button>
-
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  onClick={handleBypassSession}
-                  className="text-xs text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 font-semibold underline"
-                >
-                  Or enter Direct Practice Mode (Skip PIN requirement)
-                </button>
-              </div>
             </>
           ) : (
-            <>
+            <div className="space-y-4">
               <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs font-bold">
-                ✓ Successfully joined room #{sessionPinInput}!
+                ✓ Successfully authorized for session #{sessionPinInput}
               </div>
-              <p className="text-slate-500 text-sm">
-                Waiting for teacher to click <strong>"Start Assessment"</strong> on the Proctor Control Room.
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl text-xs space-y-1 text-left border border-slate-100 dark:border-slate-800">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Status:</span>
+                  <span className="font-bold text-amber-600 dark:text-amber-400">WAITING FOR INSTRUCTOR</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Authorization:</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">Verified ✓</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Behaviour Monitoring:</span>
+                  <span className="font-bold text-indigo-600 dark:text-indigo-400">Ready</span>
+                </div>
+              </div>
+              <p className="text-slate-500 text-xs">
+                Your assessment will begin automatically when the instructor starts the session.
               </p>
-              <div className="flex justify-center gap-2 py-4">
-                <div className="w-3 h-3 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                <div className="w-3 h-3 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                <div className="w-3 h-3 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              <div className="flex justify-center gap-2 py-2">
+                <div className="w-2.5 h-2.5 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2.5 h-2.5 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2.5 h-2.5 bg-brand-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
               </div>
-              
-              <button
-                onClick={handleBypassSession}
-                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-lg"
-              >
-                Start Coding Now (Skip Waiting)
-              </button>
-            </>
+            </div>
           )}
         </div>
       </Layout>
     );
   }
 
+  // 3. ACTIVE / ENDED ASSESSMENT WORKSPACE
   return (
     <Layout>
       <div className="space-y-4 flex flex-col h-[calc(100vh-10rem)]">
         
-        {/* Back Link */}
-        <div className="flex justify-between items-center">
+        {/* Header Bar */}
+        <div className="flex justify-between items-center bg-white dark:bg-slate-900 px-6 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <Link 
             to={`/courses/${assignment?.course}`}
             className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
@@ -248,10 +313,48 @@ const CodingPractice = () => {
             <ArrowLeft size={16} />
             <span>Return to Classroom</span>
           </Link>
-          <div className="text-xs text-slate-400 font-bold bg-white dark:bg-slate-900 border px-3 py-1.5 rounded-lg">
-            Challenge: {assignment?.title}
+
+          {/* Persistent Security Indicator & Timer */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300">
+              <Shield size={14} className="text-emerald-600" />
+              <span>🔐 Secure Assessment</span>
+              <span className="mx-1 text-slate-300">|</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Behaviour Monitoring Active</span>
+            </div>
+
+            {sessionState === 'ACTIVE' && (
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-mono font-bold text-slate-700 dark:text-slate-300">
+                <Clock size={14} />
+                <span>{formatTimer(elapsedSeconds)}</span>
+              </div>
+            )}
+
+            {sessionState === 'ENDED' && (
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-rose-100 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 rounded-xl text-xs font-bold text-rose-700 dark:text-rose-300">
+                <StopCircle size={14} />
+                <span>Assessment Ended</span>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Ended Banner */}
+        {sessionState === 'ENDED' && (
+          <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-2xl flex justify-between items-center text-rose-900 dark:text-rose-200 text-xs font-bold">
+            <div className="flex items-center gap-2">
+              <StopCircle size={16} className="text-rose-600" />
+              <span>Your instructor has ended this assessment session. Code editing and submissions are now locked.</span>
+            </div>
+            <Link
+              to="/dashboard"
+              className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-all"
+            >
+              Return to Dashboard
+            </Link>
+          </div>
+        )}
 
         {/* LeetCode Split Workspace */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
@@ -367,7 +470,8 @@ const CodingPractice = () => {
                     id="select-language"
                     value={language}
                     onChange={(e) => setLanguage(e.target.value)}
-                    className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs focus:outline-none dark:text-white font-medium"
+                    disabled={sessionState === 'ENDED'}
+                    className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs focus:outline-none dark:text-white font-medium disabled:opacity-50"
                   >
                     <option value="javascript">JavaScript</option>
                     <option value="python">Python</option>
@@ -377,7 +481,7 @@ const CodingPractice = () => {
                   <button
                     id="btn-run-code"
                     onClick={handleRunCode}
-                    disabled={running || submitting}
+                    disabled={running || submitting || sessionState === 'ENDED'}
                     className="flex items-center gap-1 text-xs font-bold bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 px-3.5 py-1.5 rounded-lg active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     <Play size={12} />
@@ -387,7 +491,7 @@ const CodingPractice = () => {
                   <button
                     id="btn-submit-code"
                     onClick={handleSubmitCode}
-                    disabled={running || submitting}
+                    disabled={running || submitting || sessionState === 'ENDED'}
                     className="flex items-center gap-1 text-xs font-bold bg-brand-600 hover:bg-brand-700 text-white px-3.5 py-1.5 rounded-lg active:scale-95 shadow-sm shadow-brand-500/10 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     <Send size={12} />
@@ -400,7 +504,7 @@ const CodingPractice = () => {
               <div 
                 id="monaco-editor-container" 
                 className="flex-1 min-h-0 relative bg-white dark:bg-[#1e1e1e]"
-                tabIndex={0} // Makes wrapper interactive for SDK focus tracking
+                tabIndex={0}
               >
                 <Editor
                   height="100%"
@@ -414,6 +518,7 @@ const CodingPractice = () => {
                     automaticLayout: true,
                     tabSize: 2,
                     scrollBeyondLastLine: false,
+                    readOnly: sessionState === 'ENDED',
                     padding: { top: 12, bottom: 12 }
                   }}
                 />
@@ -469,6 +574,29 @@ const CodingPractice = () => {
           </div>
 
         </div>
+
+        {/* Assessment Ended Modal Overlay */}
+        {sessionState === 'ENDED' && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-6 animate-fadeIn">
+            <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl max-w-md w-full text-center space-y-6 shadow-2xl">
+              <div className="w-16 h-16 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mx-auto border border-rose-500/20">
+                <XCircle size={32} />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-white">Proctored Session Ended</h2>
+                <p className="text-slate-400 text-sm mt-2 leading-relaxed">
+                  The instructor has officially closed this assessment session. All code compilation, testing, and submissions have been locked.
+                </p>
+              </div>
+              <button
+                onClick={() => navigate(`/courses/${assignment?.course}`)}
+                className="w-full py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all shadow-lg"
+              >
+                Return to Classroom
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
     </Layout>

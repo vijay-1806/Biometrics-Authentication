@@ -8,7 +8,10 @@
     "install-all": "npm run install-backend && npm run install-frontend",
     "server": "npm run dev --prefix backend",
     "client": "npm run dev --prefix frontend",
-    "dev": "concurrently \"npm run server\" \"npm run client\""
+    "ml": "node scripts/start-ml.js",
+    "data-collection": "npm run ml",
+    "lms": "concurrently \"npm run server\" \"npm run client\"",
+    "dev": "concurrently \"npm run server\" \"npm run client\" \"npm run ml\""
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
