@@ -612,6 +612,204 @@ const retrainUser = async (req, res) => {
   }
 };
 
+const getSessionReport = async (req, res) => {
+  try {
+    const { assessmentSessionId } = req.params;
+    let targetStudentId = req.query.studentId || req.user._id.toString();
+
+    // Authorization Check
+    if (req.user.role === 'student') {
+      if (targetStudentId !== req.user._id.toString()) {
+        return res.status(403).json({ error: 'Access denied: Students may only view their own report.' });
+      }
+    }
+
+    const sessionDoc = await BehaviorSession.findOne({
+      student: targetStudentId,
+      assessmentSessionId: assessmentSessionId
+    }).populate('student', 'name email');
+
+    if (!sessionDoc) {
+      return res.status(404).json({ error: 'Behavioral session record not found for this assessment session.' });
+    }
+
+    const alerts = await BehaviorAlert.find({
+      student: targetStudentId,
+      $or: [{ session: assessmentSessionId }, { exam: sessionDoc.exam }]
+    }).sort({ createdAt: 1 }).lean();
+
+    const history = sessionDoc.history || [];
+    const initialTrust = history.length > 0 ? history[0] : sessionDoc.smoothedScore;
+    const finalTrust = sessionDoc.smoothedScore;
+    const avgTrust = history.length > 0 ? Math.round(history.reduce((a, b) => a + b, 0) / history.length) : finalTrust;
+    const minTrust = history.length > 0 ? Math.min(...history) : finalTrust;
+    const maxTrust = history.length > 0 ? Math.max(...history) : finalTrust;
+
+    let highestRisk = 'LOW';
+    const transitions = [];
+    let currentRisk = 'LOW';
+
+    alerts.forEach(alert => {
+      let nextRisk = 'LOW';
+      if (alert.severity === 'high' || alert.alertType === 'behavioral_anomaly') nextRisk = 'HIGH';
+      else if (alert.severity === 'medium' || alert.alertType === 'paste_detected') nextRisk = 'MEDIUM';
+      else if (alert.alertType === 'tab_switch' || alert.alertType === 'device_change') nextRisk = 'LOW';
+
+      if (nextRisk === 'HIGH') highestRisk = 'HIGH';
+      else if (nextRisk === 'MEDIUM' && highestRisk !== 'HIGH') highestRisk = 'MEDIUM';
+
+      if (nextRisk !== currentRisk) {
+        transitions.push({
+          timestamp: alert.createdAt,
+          from: currentRisk,
+          to: nextRisk,
+          trustScore: alert.score ?? finalTrust,
+          reason: alert.alertType.replace('_', ' ').toUpperCase()
+        });
+        currentRisk = nextRisk;
+      }
+    });
+
+    let verdictStatus = 'AUTHENTICATED';
+    const verdictReasons = [];
+
+    if (finalTrust >= 75 && sessionDoc.tabBlurCount === 0 && sessionDoc.pasteCount === 0) {
+      verdictStatus = 'AUTHENTICATED';
+      verdictReasons.push('High behavioral baseline match maintained throughout assessment');
+    } else if (finalTrust >= 40 && sessionDoc.tabBlurCount <= 2 && sessionDoc.pasteCount <= 1) {
+      verdictStatus = 'REQUIRES_REVIEW';
+      if (sessionDoc.tabBlurCount > 0) verdictReasons.push(`${sessionDoc.tabBlurCount} tab switch event(s) recorded`);
+      if (sessionDoc.pasteCount > 0) verdictReasons.push(`${sessionDoc.pasteCount} paste operation(s) recorded`);
+      if (finalTrust < 70) verdictReasons.push(`Behavioral trust score dropped to ${finalTrust}%`);
+    } else {
+      verdictStatus = 'SUSPICIOUS';
+      if (sessionDoc.tabBlurCount > 2) verdictReasons.push(`Excessive tab switches (${sessionDoc.tabBlurCount})`);
+      if (sessionDoc.pasteCount > 1) verdictReasons.push(`Multiple paste events (${sessionDoc.pasteCount})`);
+      if (finalTrust < 40) verdictReasons.push(`Severe behavioral anomaly detected (${finalTrust}% trust)`);
+    }
+
+    res.json({
+      assessmentSessionId,
+      student: {
+        id: sessionDoc.student._id,
+        name: sessionDoc.student.name,
+        email: sessionDoc.student.email
+      },
+      session: {
+        status: sessionDoc.updatedAt ? 'ENDED' : 'ACTIVE',
+        updatedAt: sessionDoc.updatedAt,
+        totalWindowsScored: sessionDoc.totalWindowsScored || 0
+      },
+      trust: {
+        initial: initialTrust,
+        final: finalTrust,
+        average: avgTrust,
+        minimum: minTrust,
+        maximum: maxTrust,
+        history: history.length > 0 ? history : [finalTrust]
+      },
+      risk: {
+        initial: 'LOW',
+        final: currentRisk,
+        highest: highestRisk,
+        transitions
+      },
+      security: {
+        tabSwitches: sessionDoc.tabBlurCount || 0,
+        pasteEvents: sessionDoc.pasteCount || 0
+      },
+      behaviour: {
+        anomalyCount: alerts.filter(a => a.alertType === 'behavioral_anomaly').length,
+        totalAlerts: alerts.length
+      },
+      verdict: {
+        status: verdictStatus,
+        reasons: verdictReasons
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getSessionReport:', error);
+    res.status(500).json({ error: 'Server error generating candidate session report' });
+  }
+};
+
+const getTeacherAnalytics = async (req, res) => {
+  try {
+    const { assessmentSessionId } = req.params;
+
+    const sessions = await BehaviorSession.find({ assessmentSessionId })
+      .populate('student', 'name email')
+      .lean();
+
+    if (!sessions || sessions.length === 0) {
+      return res.status(404).json({ error: 'No sessions found for this assessment session ID.' });
+    }
+
+    const alerts = await BehaviorAlert.find({ session: assessmentSessionId }).lean();
+
+    const candidateSummaries = sessions.map(s => {
+      const finalTrust = s.smoothedScore || 85;
+      let riskLevel = 'LOW';
+      if (s.tabBlurCount > 2 || s.pasteCount > 1 || finalTrust < 40) riskLevel = 'HIGH';
+      else if (s.tabBlurCount > 0 || s.pasteCount > 0 || finalTrust < 70) riskLevel = 'MEDIUM';
+
+      return {
+        studentId: s.student._id,
+        name: s.student.name,
+        email: s.student.email,
+        trustScore: finalTrust,
+        riskLevel,
+        tabSwitches: s.tabBlurCount || 0,
+        pasteEvents: s.pasteCount || 0,
+        windowsScored: s.totalWindowsScored || 0,
+        lastSeen: s.updatedAt
+      };
+    });
+
+    const totalParticipants = candidateSummaries.length;
+    const scores = candidateSummaries.map(c => c.trustScore);
+    const avgTrust = Math.round(scores.reduce((a, b) => a + b, 0) / totalParticipants);
+    const minTrust = Math.min(...scores);
+    const maxTrust = Math.max(...scores);
+
+    const riskDistribution = {
+      LOW: candidateSummaries.filter(c => c.riskLevel === 'LOW').length,
+      MEDIUM: candidateSummaries.filter(c => c.riskLevel === 'MEDIUM').length,
+      HIGH: candidateSummaries.filter(c => c.riskLevel === 'HIGH').length,
+      CRITICAL: candidateSummaries.filter(c => c.riskLevel === 'CRITICAL').length
+    };
+
+    const totalTabSwitches = candidateSummaries.reduce((acc, c) => acc + c.tabSwitches, 0);
+    const totalPasteEvents = candidateSummaries.reduce((acc, c) => acc + c.pasteEvents, 0);
+
+    res.json({
+      assessmentSessionId,
+      participants: {
+        total: totalParticipants,
+        connected: totalParticipants,
+        completed: sessions.filter(s => s.updatedAt).length
+      },
+      trust: {
+        average: avgTrust,
+        minimum: minTrust,
+        maximum: maxTrust
+      },
+      riskDistribution,
+      security: {
+        totalTabSwitches,
+        totalPasteEvents,
+        totalAlerts: alerts.length
+      },
+      candidates: candidateSummaries
+    });
+
+  } catch (error) {
+    console.error('Error in getTeacherAnalytics:', error);
+    res.status(500).json({ error: 'Server error generating teacher assessment analytics' });
+  }
+};
+
 module.exports = {
   postWindow,
   scoreWindow,
@@ -621,5 +819,7 @@ module.exports = {
   enrollPassage,
   getBiometricStatus,
   getPassage,
-  retrainUser
+  retrainUser,
+  getSessionReport,
+  getTeacherAnalytics
 };
