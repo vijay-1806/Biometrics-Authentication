@@ -9,6 +9,9 @@
     "server": "npm run dev --prefix backend",
     "client": "npm run dev --prefix frontend",
     "ml": "python -m uvicorn main:app --app-dir behavioral-auth-ml-service/backend --reload --port 8000",
+    "db:export": "npm run db:export --prefix backend",
+    "db:import": "npm run db:import --prefix backend",
+    "db:seed": "npm run db:seed --prefix backend",
     "dev": "concurrently \"npm run server\" \"npm run client\""
   },
   "devDependencies": {

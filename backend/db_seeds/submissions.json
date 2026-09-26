@@ -1,0 +1,16 @@
+[
+  {
+    "_id": "6ab4a54e52379a75c3884576",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "assignment": "6a926a0b6a5e367e13191100",
+    "code": "the brown fox jumpe above the lazy dog while the ealry morning sun rises above the quiet green hills",
+    "language": "python",
+    "status": "fail",
+    "output": "Test Case 1: Error:   File \u001b[35m\"C:\\Users\\vijay\\OneDrive\\\\u6587\\u6863\\CLG - PROJECTS\\NEW\\Biometrics-Authentication\\backend\\temp\\solution_1790223693854.py\"\u001b[0m, line \u001b[35m1\u001b[0m\r\n    the \u001b[1;31mbrown\u001b[0m fox jumpe above the lazy dog while the ealry morning sun rises above the quiet green hills\r\n        \u001b[1;31m^^^^^\u001b[0m\r\n\u001b[1;35mSyntaxError\u001b[0m: \u001b[35minvalid syntax\u001b[0m\r\n\n",
+    "testCasesPassed": 0,
+    "testCasesTotal": 1,
+    "createdAt": "2026-09-24T04:21:34.241Z",
+    "updatedAt": "2026-09-24T04:21:34.241Z",
+    "__v": 0
+  }
+]

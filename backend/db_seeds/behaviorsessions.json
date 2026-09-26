@@ -1,0 +1,210 @@
+[
+  {
+    "_id": "6ab736b824b47ddad400e2e7",
+    "student": "6ab4975852379a75c38844e5",
+    "exam": "6a926a0b6a5e367e13191100",
+    "smoothedScore": 88,
+    "history": [
+      88,
+      88,
+      88,
+      88,
+      88,
+      88,
+      88,
+      88,
+      88,
+      88,
+      88,
+      88,
+      88
+    ],
+    "alreadyFlaggedRecently": false,
+    "flagTimeoutEnd": null,
+    "totalWindowsScored": 12,
+    "deviceChangeFlagged": false,
+    "tabBlurCount": 0,
+    "pasteCount": 0,
+    "initialDeviceInfo": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+      "screenWidth": 1536,
+      "screenHeight": 864,
+      "pointerTypes": [
+        "mouse"
+      ]
+    },
+    "deviceInfo": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+      "screenWidth": 1536,
+      "screenHeight": 864,
+      "pointerTypes": [
+        "mouse"
+      ]
+    },
+    "createdAt": "2026-09-26T03:06:33.735Z",
+    "updatedAt": "2026-09-26T03:07:51.096Z",
+    "__v": 11
+  },
+  {
+    "_id": "6ab73added4715f8a4db7344",
+    "student": "6a9268397e77cbd6c3c3e886",
+    "exam": "6a926a0b6a5e367e13191100",
+    "smoothedScore": 15,
+    "history": [
+      88,
+      25,
+      25,
+      25,
+      29,
+      19,
+      32,
+      20,
+      17,
+      16,
+      15,
+      15,
+      15,
+      15
+    ],
+    "alreadyFlaggedRecently": false,
+    "flagTimeoutEnd": null,
+    "totalWindowsScored": 13,
+    "deviceChangeFlagged": false,
+    "tabBlurCount": 2,
+    "pasteCount": 0,
+    "initialDeviceInfo": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+      "screenWidth": 1536,
+      "screenHeight": 864,
+      "pointerTypes": []
+    },
+    "deviceInfo": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+      "screenWidth": 1536,
+      "screenHeight": 864,
+      "pointerTypes": []
+    },
+    "createdAt": "2026-09-26T03:24:14.093Z",
+    "updatedAt": "2026-09-26T03:25:18.630Z",
+    "__v": 12
+  },
+  {
+    "_id": "6ab73b6fed4715f8a4db7392",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "exam": "6a926a0b6a5e367e13191100",
+    "smoothedScore": 22,
+    "history": [
+      62,
+      62,
+      62,
+      62,
+      62,
+      62,
+      62,
+      62,
+      52,
+      42,
+      32,
+      32,
+      32,
+      32,
+      32,
+      32,
+      32,
+      32,
+      32,
+      22
+    ],
+    "alreadyFlaggedRecently": false,
+    "flagTimeoutEnd": null,
+    "totalWindowsScored": 21,
+    "deviceChangeFlagged": false,
+    "tabBlurCount": 6,
+    "pasteCount": 0,
+    "initialDeviceInfo": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+      "screenWidth": 1536,
+      "screenHeight": 864,
+      "pointerTypes": [
+        "mouse"
+      ]
+    },
+    "deviceInfo": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+      "screenWidth": 1536,
+      "screenHeight": 864,
+      "pointerTypes": [
+        "mouse"
+      ]
+    },
+    "createdAt": "2026-09-26T03:26:39.358Z",
+    "updatedAt": "2026-09-26T03:39:23.887Z",
+    "__v": 20
+  },
+  {
+    "_id": "6ab73f9cb7060eb882ba9a71",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "exam": "6a926a0b6a5e367e13191100",
+    "session": "default_session",
+    "smoothedScore": 68,
+    "history": [
+      36.5,
+      40,
+      26,
+      38,
+      25,
+      59,
+      66,
+      68
+    ],
+    "alreadyFlaggedRecently": true,
+    "flagTimeoutEnd": "2026-09-26T03:45:29.668Z",
+    "totalWindowsScored": 8,
+    "tabBlurCount": 8,
+    "pasteCount": 0,
+    "copyCount": 0,
+    "deviceChangeFlagged": false,
+    "createdAt": "2026-09-26T03:44:28.216Z",
+    "updatedAt": "2026-09-26T03:59:37.211Z",
+    "__v": 8
+  },
+  {
+    "_id": "6ab74002b7060eb882ba9a7e",
+    "student": "6ab4975852379a75c38844e5",
+    "exam": "6a926a0b6a5e367e13191100",
+    "session": "default_session",
+    "smoothedScore": 40,
+    "history": [
+      26,
+      31,
+      60,
+      59,
+      53,
+      35,
+      62,
+      36,
+      63,
+      69,
+      68,
+      52,
+      59,
+      69,
+      71,
+      74,
+      73,
+      54,
+      47,
+      40
+    ],
+    "alreadyFlaggedRecently": true,
+    "flagTimeoutEnd": "2026-09-26T04:07:32.564Z",
+    "totalWindowsScored": 38,
+    "tabBlurCount": 15,
+    "pasteCount": 0,
+    "copyCount": 0,
+    "deviceChangeFlagged": false,
+    "createdAt": "2026-09-26T03:46:10.831Z",
+    "updatedAt": "2026-09-26T04:23:54.786Z",
+    "__v": 38
+  }
+]
