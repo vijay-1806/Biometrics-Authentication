@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import useBehaviorTracking from '../hooks/useBehaviorTracking';
@@ -12,16 +12,17 @@ import {
   Users,
   ArrowLeft,
   Calendar,
-  Lock,
   KeyRound,
-  Clock,
   Send,
   AlertCircle,
+  Zap,
+  Clock
 } from 'lucide-react';
 
 const CourseDetails = () => {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   useBehaviorTracking('general');
 
@@ -31,20 +32,22 @@ const CourseDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Session join state
+  // Session join state (No password field)
   const [showJoinModal, setShowJoinModal] = useState(false);
+  const [targetAssignmentId, setTargetAssignmentId] = useState('');
   const [sessionId, setSessionId] = useState('');
-  const [sessionPassword, setSessionPassword] = useState('');
-  const [joinStep, setJoinStep] = useState('form'); // 'form' | 'waiting' | 'approved'
   const [joinError, setJoinError] = useState('');
-  const [joinLoading, setJoinLoading] = useState(false);
 
   const fetchCourseDetails = async () => {
     try {
       setLoading(true);
       const res = await axios.get(`/api/courses/${id}`);
       setCourse(res.data.course);
-      setAssignments(res.data.assignments || []);
+      const assignList = res.data.assignments || [];
+      setAssignments(assignList);
+      if (assignList.length > 0) {
+        setTargetAssignmentId(assignList[0]._id);
+      }
 
       if (user.role === 'student' && res.data.studentData) {
         setStudentSubmissions(res.data.studentData.submissions || []);
@@ -70,31 +73,35 @@ const CourseDetails = () => {
     return { completed: true, passed, bestScore, attemptsCount: subs.length };
   };
 
-  const handleJoinSubmit = async (e) => {
+  const handleJoinSubmit = (e) => {
     e.preventDefault();
     setJoinError('');
-    if (!sessionId.trim() || !sessionPassword.trim()) {
-      setJoinError('Both Session ID and password are required.'); return;
+    const cleanPin = sessionId.trim().replace(/\D/g, '');
+    if (cleanPin.length !== 6) {
+      setJoinError('Please enter a valid 6-digit Session ID / PIN.');
+      return;
     }
-    setJoinLoading(true);
-    try {
-      await axios.post('/api/sessions/join-request', {
-        sessionId: sessionId.trim(),
-        password: sessionPassword.trim(),
-      });
-      setJoinStep('waiting');
-    } catch (err) {
-      setJoinError(err.response?.data?.message || 'Could not submit join request. Check Session ID and password.');
-    } finally {
-      setJoinLoading(false);
+
+    const selectedAssId = targetAssignmentId || (assignments.length > 0 ? assignments[0]._id : '');
+    if (!selectedAssId) {
+      setJoinError('No coding assessment available in this course to join.');
+      return;
     }
+
+    // Navigate to exam page with verified sessionPin
+    navigate(`/assignments/${selectedAssId}/coding?sessionPin=${cleanPin}`);
+  };
+
+  const openJoinModalFor = (assignmentId) => {
+    if (assignmentId) setTargetAssignmentId(assignmentId);
+    setSessionId('');
+    setJoinError('');
+    setShowJoinModal(true);
   };
 
   const resetJoinModal = () => {
     setShowJoinModal(false);
     setSessionId('');
-    setSessionPassword('');
-    setJoinStep('form');
     setJoinError('');
   };
 
@@ -149,11 +156,11 @@ const CourseDetails = () => {
                 <p className="text-slate-500 mt-1.5 max-w-2xl text-sm">{course.description}</p>
               </div>
 
-              {/* Join Session button — students only */}
+              {/* Join Live Session button — students only */}
               {user.role === 'student' && (
                 <button
-                  onClick={() => setShowJoinModal(true)}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm text-white flex-shrink-0 transition-all hover:opacity-90 active:scale-[0.98]"
+                  onClick={() => openJoinModalFor(assignments[0]?._id || '')}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-white flex-shrink-0 transition-all hover:opacity-90 active:scale-[0.98]"
                   style={{ background: 'linear-gradient(135deg, #4f46e5, #6366f1)', boxShadow: '0 4px 14px rgba(79,70,229,0.3)' }}
                 >
                   <KeyRound size={16} />
@@ -179,14 +186,16 @@ const CourseDetails = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Coding Assignments — 2/3 width */}
+          {/* Coding Assignments */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center gap-2">
-              <FileCode size={19} className="text-brand-600" />
-              <h2 className="text-lg font-bold text-slate-900">Coding Assessments</h2>
-              {assignments.length > 0 && (
-                <span className="lms-badge badge-slate">{assignments.length}</span>
-              )}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileCode size={19} className="text-brand-600" />
+                <h2 className="text-lg font-bold text-slate-900">Proctored Coding Assessments</h2>
+                {assignments.length > 0 && (
+                  <span className="lms-badge badge-slate">{assignments.length}</span>
+                )}
+              </div>
             </div>
 
             {assignments.length === 0 ? (
@@ -229,21 +238,18 @@ const CourseDetails = () => {
 
                       <div className="flex-shrink-0">
                         {user.role === 'student' ? (
-                          <Link
-                            to={`/assignments/${assignment._id}/coding`}
-                            className={`flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-[0.98] ${
-                              status.completed && status.passed
-                                ? 'text-slate-600 hover:bg-slate-100'
-                                : 'text-white hover:opacity-90'
-                            }`}
-                            style={!(status.completed && status.passed) ? {
+                          <button
+                            onClick={() => openJoinModalFor(assignment._id)}
+                            className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl text-white transition-all active:scale-[0.98]"
+                            style={{
                               background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
-                              boxShadow: '0 3px 10px rgba(79,70,229,0.25)'
-                            } : { background: '#f1f5f9' }}
+                              boxShadow: '0 3px 10px rgba(79,70,229,0.25)',
+                              border: 'none', cursor: 'pointer'
+                            }}
                           >
-                            <Play size={14} />
-                            {status.completed ? 'Try Again' : 'Start Challenge'}
-                          </Link>
+                            <KeyRound size={14} />
+                            Attend Exam
+                          </button>
                         ) : (
                           <span className="text-xs text-slate-400 font-medium italic">
                             {assignment.testCases?.length || 0} test cases
@@ -295,9 +301,12 @@ const CourseDetails = () => {
         </div>
       </div>
 
-      {/* Join Session Modal */}
+      {/* Join Session Modal (No Password Required) */}
       {showJoinModal && (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) resetJoinModal(); }}>
+        <div
+          className="modal-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) resetJoinModal(); }}
+        >
           <div className="modal-box max-w-md p-7 space-y-5">
             {/* Header */}
             <div className="flex items-center justify-between">
@@ -307,90 +316,75 @@ const CourseDetails = () => {
                 </div>
                 <div>
                   <h3 className="font-black text-slate-900 text-lg">Join Live Session</h3>
-                  <p className="text-xs text-slate-500">Enter your session credentials</p>
+                  <p className="text-xs text-slate-500">Enter your 6-digit Session ID</p>
                 </div>
               </div>
-              <button onClick={resetJoinModal} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
+              <button
+                onClick={resetJoinModal}
+                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+              >
                 ✕
               </button>
             </div>
 
-            {joinStep === 'form' && (
-              <form onSubmit={handleJoinSubmit} className="space-y-4">
-                {joinError && (
-                  <div className="toast-error">{joinError}</div>
-                )}
+            <form onSubmit={handleJoinSubmit} className="space-y-4">
+              {joinError && (
+                <div className="toast-error">{joinError}</div>
+              )}
 
-                <div className="p-3 rounded-xl flex items-start gap-2 text-sm" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
-                  <Lock size={14} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-amber-800 text-xs">A password is required to join. After submitting, your teacher must approve your request before you're admitted.</p>
-                </div>
-
+              {/* Assessment picker */}
+              {assignments.length > 1 && (
                 <div>
-                  <label className="lms-label">Session ID</label>
-                  <input
-                    type="text"
-                    value={sessionId}
-                    onChange={e => setSessionId(e.target.value)}
+                  <label className="lms-label">Target Assessment</label>
+                  <select
+                    value={targetAssignmentId}
+                    onChange={e => setTargetAssignmentId(e.target.value)}
                     className="lms-input"
-                    placeholder="Enter the 6-digit session ID"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="lms-label">Session Password</label>
-                  <input
-                    type="password"
-                    value={sessionPassword}
-                    onChange={e => setSessionPassword(e.target.value)}
-                    className="lms-input"
-                    placeholder="Password from your teacher"
-                    required
-                  />
-                </div>
-
-                <div className="flex gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={resetJoinModal}
-                    className="flex-1 py-2.5 rounded-xl font-semibold text-sm text-slate-600 hover:bg-slate-100 transition-colors"
-                    style={{ border: '1.5px solid #e2e8f0' }}
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={joinLoading}
-                    className="flex-1 py-2.5 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
-                    style={{ background: '#4f46e5' }}
-                  >
-                    {joinLoading ? <div className="lms-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : <Send size={15} />}
-                    Send Join Request
-                  </button>
+                    {assignments.map(a => (
+                      <option key={a._id} value={a._id}>{a.title} ({a.language || 'JS'})</option>
+                    ))}
+                  </select>
                 </div>
-              </form>
-            )}
+              )}
 
-            {joinStep === 'waiting' && (
-              <div className="text-center py-4 space-y-4">
-                <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center" style={{ background: '#fffbeb' }}>
-                  <Clock size={28} className="text-amber-500" />
-                </div>
-                <div>
-                  <h4 className="font-black text-slate-900 text-lg">Request Sent!</h4>
-                  <p className="text-slate-500 text-sm mt-1 max-w-xs mx-auto">
-                    Your join request has been submitted. Please wait for your teacher to approve it. You'll be let into the session once approved.
-                  </p>
-                </div>
+              <div>
+                <label className="lms-label">Session ID (6-digit PIN)</label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={sessionId}
+                  onChange={e => { setSessionId(e.target.value.replace(/\D/g, '')); setJoinError(''); }}
+                  className="lms-input"
+                  style={{ textAlign: 'center', fontSize: '24px', letterSpacing: '6px', fontWeight: '800', fontFamily: 'monospace' }}
+                  placeholder="000000"
+                  required
+                  autoFocus
+                />
+                <p className="text-xs text-slate-400 mt-1.5">
+                  Get the 6-digit PIN from your teacher's proctor screen. No password needed.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
                 <button
+                  type="button"
                   onClick={resetJoinModal}
-                  className="px-6 py-2.5 rounded-xl font-semibold text-sm text-white transition-all"
+                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm text-slate-600 hover:bg-slate-100 transition-colors"
+                  style={{ border: '1.5px solid #e2e8f0' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98]"
                   style={{ background: '#4f46e5' }}
                 >
-                  Got it
+                  <Zap size={15} />
+                  Enter Exam Room
                 </button>
               </div>
-            )}
+            </form>
           </div>
         </div>
       )}

@@ -34,6 +34,7 @@ app.use('/api/assignments', require('./routes/assignmentRoutes'));
 app.use('/api/quizzes', require('./routes/quizRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/behavior', require('./routes/behaviorRoutes'));
+app.use('/api/notifications', require('./routes/notificationRoutes'));
 
 // 404 Route handler
 app.use((req, res, next) => {
@@ -55,6 +56,6 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
 });
-// Trigger nodemon reload for behavior controller update v2
+// Server ready and running on port 5000
 
 

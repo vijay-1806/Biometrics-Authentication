@@ -9,6 +9,8 @@ import CodingPractice from './pages/CodingPractice';
 import Profile from './pages/Profile';
 import MLTraining from './pages/MLTraining';
 import LiveProctorDashboard from './pages/LiveProctorDashboard';
+import AttendExam from './pages/AttendExam';
+import MyPerformance from './pages/MyPerformance';
 
 // Route protection wrapper
 const ProtectedRoute = ({ children }) => {
@@ -125,6 +127,27 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          <Route
+            path="/attend-exam"
+            element={
+              <ProtectedRoute>
+                <AttendExam />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/my-performance"
+            element={
+              <ProtectedRoute>
+                <MyPerformance />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* /courses redirect — courses now live inside Dashboard as tabs */}
+          <Route path="/courses" element={<ProtectedRoute><Navigate to="/dashboard" replace /></ProtectedRoute>} />
 
           {/* Catch-all Fallback Redirect */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

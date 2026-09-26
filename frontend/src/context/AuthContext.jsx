@@ -34,10 +34,24 @@ export const AuthProvider = ({ children }) => {
       (response) => response,
       (error) => {
         if (error.response && error.response.status === 401 && error.response.data?.sessionExpired) {
-          alert('🔒 Session Expired: Your account was logged into from another device.');
+          // Show a polished toast banner instead of a browser alert
+          const banner = document.createElement('div');
+          banner.id = 'session-expired-banner';
+          banner.style.cssText = `
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: #fff1f2; border: 1.5px solid #fecdd3; color: #e11d48;
+            padding: 14px 24px; border-radius: 14px;
+            font-family: system-ui, sans-serif; font-size: 14px; font-weight: 600;
+            box-shadow: 0 8px 32px rgba(225,29,72,0.15);
+            z-index: 99999; display: flex; align-items: center; gap: 10px;
+            animation: slideDown 300ms ease;
+            max-width: 420px; text-align: center;
+          `;
+          banner.innerHTML = `<span>🔒</span><span>Your account was logged in on another device. This session has been ended.</span>`;
+          document.body.appendChild(banner);
           setToken('');
           setUser(null);
-          window.location.href = '/login';
+          setTimeout(() => { window.location.href = '/login'; }, 2500);
         }
         return Promise.reject(error);
       }

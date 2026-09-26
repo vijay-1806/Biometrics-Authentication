@@ -385,3 +385,115 @@ textarea {
   border-color: #6366f1;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
+
+/* ============================================================
+   SLIDE IN RIGHT (for notification panel)
+   ============================================================ */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* ============================================================
+   PULSE (for live status dots)
+   ============================================================ */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ============================================================
+   TAB BAR
+   ============================================================ */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid #f1f5f9;
+  padding-bottom: 0;
+}
+
+.tab-item {
+  padding: 9px 18px;
+  border: none;
+  background: transparent;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  border-radius: 8px 8px 0 0;
+  transition: all 150ms ease;
+}
+
+.tab-item:hover {
+  color: #4338ca;
+  background: #f5f7ff;
+}
+
+.tab-item.active {
+  color: #4f46e5;
+  border-bottom-color: #4f46e5;
+  background: #eef2ff;
+  font-weight: 700;
+}
+
+/* ============================================================
+   TOAST / ALERT BANNERS
+   ============================================================ */
+.toast-success {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+  font-size: 0.875rem;
+  font-weight: 500;
+  animation: fadeIn 200ms ease;
+}
+
+.toast-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #e11d48;
+  font-size: 0.875rem;
+  font-weight: 500;
+  animation: fadeIn 200ms ease;
+}
+
+/* ============================================================
+   GOOGLE WORKSPACE TACTILE FEEDBACK & MODAL ANIMATION
+   ============================================================ */
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+button:active {
+  transform: scale(0.975);
+  transition: transform 80ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lms-btn:active, .pin-display:active {
+  transform: scale(0.975);
+}

@@ -23,12 +23,6 @@ const Navbar = () => {
 
       {/* Right */}
       <div className="flex items-center gap-2">
-        <button
-          className="relative p-2 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-          title="Notifications"
-        >
-          <Bell size={18} />
-        </button>
         <Link
           to="/profile"
           className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl hover:bg-slate-100 transition-colors"

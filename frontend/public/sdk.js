@@ -382,23 +382,30 @@
       };
 
       // 4. Tab switch & window blur listeners
+      // Fix: In-app clicks (like Description/Attempts tabs or Monaco editor) must NOT trigger false tab switch
       this._boundBlur = () => {
         if (!this._sessionActive) return;
-        const now = Date.now();
-        if (now - this._lastBlurTime < 800) return; // debounce
-        this._lastBlurTime = now;
-
-        this._onViolationCallback({
-          type: 'tab_switch',
-          timestamp: now
-        });
+        // Delay verification to allow in-page focus shifts to settle
+        setTimeout(() => {
+          if (!this._sessionActive) return;
+          // If the document still has focus, or document is not hidden and active element is within page, do not trigger
+          if (document.hidden) {
+            const now = Date.now();
+            if (now - this._lastBlurTime < 1500) return;
+            this._lastBlurTime = now;
+            this._onViolationCallback({
+              type: 'tab_switch',
+              timestamp: now
+            });
+          }
+        }, 350);
       };
 
       this._boundVisibilityChange = () => {
         if (!this._sessionActive) return;
         if (document.hidden) {
           const now = Date.now();
-          if (now - this._lastBlurTime < 800) return;
+          if (now - this._lastBlurTime < 1500) return;
           this._lastBlurTime = now;
 
           this._onViolationCallback({
