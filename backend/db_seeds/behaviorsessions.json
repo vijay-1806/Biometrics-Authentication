@@ -1,0 +1,41 @@
+[
+  {
+    "_id": "6ab762f80bd68165000ddb81",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "exam": "6a926a0b6a5e367e13191100",
+    "session": "default_session",
+    "smoothedScore": 20,
+    "history": [
+      54,
+      62,
+      33,
+      51,
+      65,
+      39,
+      26,
+      22,
+      21,
+      20,
+      20,
+      20,
+      25,
+      58,
+      31,
+      24,
+      21,
+      20,
+      20,
+      20
+    ],
+    "alreadyFlaggedRecently": true,
+    "flagTimeoutEnd": "2026-09-26T06:35:54.449Z",
+    "totalWindowsScored": 21,
+    "tabBlurCount": 6,
+    "pasteCount": 3,
+    "copyCount": 4,
+    "deviceChangeFlagged": false,
+    "createdAt": "2026-09-26T06:15:20.849Z",
+    "updatedAt": "2026-09-26T06:35:42.873Z",
+    "__v": 21
+  }
+]

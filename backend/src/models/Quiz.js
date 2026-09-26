@@ -2,8 +2,12 @@ const mongoose = require('mongoose');
 
 const quizSchema = new mongoose.Schema(
   {
+    _id: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => new mongoose.Types.ObjectId().toString(),
+    },
     course: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.Mixed,
       ref: 'Course',
       required: true,
     },

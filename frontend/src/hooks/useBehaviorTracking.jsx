@@ -1,229 +1,150 @@
 import { useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { startBiometricExamSession, stopBiometricExamSession, fetchBiometricStatus } from '../services/bioAuth';
 
-export const useBehaviorTracking = (context = 'general', examId = null, assessmentSessionId = null) => {
+export const useBehaviorTracking = (context = 'general', examId = null) => {
   const { user, token } = useAuth();
-  const eventsBuffer = useRef([]);
-  const sessionId = useRef(
-    Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
-  );
-  const windowTimer = useRef(null);
-  const windowStartTime = useRef(Date.now());
-  const pointerTypes = useRef(new Set());
-  // Keep a stable ref to sendWindow so closures registered early can call it
-  const sendWindowRef = useRef(null);
+  const toastTimer = useRef(null);
 
   useEffect(() => {
     if (!user || !token) return;
 
-    // ─── SEND FUNCTION (defined first so all handlers below can reference it) ─
-    const sendWindow = async (force = false) => {
-      const events = [...eventsBuffer.current];
-      const hasSecurityEvent = events.some(
-        ev => ev.type === 'paste' || (ev.type === 'visibilitychange' && ev.hidden)
-      );
+    const isExam = context === 'exam' || context === 'quiz' || Boolean(examId);
+    if (!isExam) return;
 
-      if (!force && !hasSecurityEvent && events.length === 0) {
-        return; // empty buffer, nothing to send
+    // Toast banner to warn students on violations during exams
+    const showWarningToast = (message) => {
+      const toastId = 'behavior-violation-toast';
+      let toast = document.getElementById(toastId);
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = toastId;
+        toast.style.position = 'fixed';
+        toast.style.bottom = '24px';
+        toast.style.left = '50%';
+        toast.style.transform = 'translateX(-50%)';
+        toast.style.backgroundColor = '#881337'; // Rose 900
+        toast.style.color = '#ffe4e6'; // Rose 100
+        toast.style.border = '1px solid #f43f5e';
+        toast.style.padding = '10px 22px';
+        toast.style.borderRadius = '10px';
+        toast.style.fontSize = '13px';
+        toast.style.fontWeight = '600';
+        toast.style.zIndex = '99999';
+        toast.style.boxShadow = '0 10px 25px -5px rgba(0, 0, 0, 0.4)';
+        toast.style.display = 'flex';
+        toast.style.alignItems = 'center';
+        toast.style.gap = '8px';
+        toast.style.transition = 'opacity 0.3s ease';
+        document.body.appendChild(toast);
       }
+      toast.innerHTML = `<span style="font-size: 16px;">⚠️</span> <span>${message}</span>`;
+      toast.style.opacity = '1';
+      toast.style.pointerEvents = 'auto';
 
-      eventsBuffer.current = [];
-      const startTime = windowStartTime.current;
-      const endTime = Date.now();
-      windowStartTime.current = endTime;
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => {
+        if (toast) {
+          toast.style.opacity = '0';
+          toast.style.pointerEvents = 'none';
+        }
+      }, 3500);
+    };
 
-      if (events.length === 0) return;
-
-      const tabBlurCount = events.filter(e => e.type === 'visibilitychange' && e.hidden).length;
-      const pasteCount = events.filter(e => e.type === 'paste').length;
-      console.log(`[BehaviorTracking] Sending window: ${events.length} events, tabBlurCount=${tabBlurCount}, pasteCount=${pasteCount}, force=${force}`);
-
+    // Forward telemetry & results to LMS proctoring backend so the teacher dashboard updates
+    const syncWithProctor = async (payload) => {
       try {
-        const isExam = context === 'exam';
-        const endpoint = isExam ? '/api/behavior/score' : '/api/behavior/window';
-
-        const deviceInfo = {
-          userAgent: navigator.userAgent,
-          screenWidth: window.screen.width,
-          screenHeight: window.screen.height,
-          pointerTypes: Array.from(pointerTypes.current)
-        };
-        pointerTypes.current.clear();
-
-        const payload = {
-          events,
-          session: sessionId.current,
-          context,
-          windowStartTime: startTime,
-          windowEndTime: endTime,
-          deviceInfo
-        };
-
-        if (isExam) {
-          payload.examId = examId;
-          payload.studentId = user._id;
-          if (assessmentSessionId) {
-            payload.assessmentSessionId = assessmentSessionId;
+        await axios.post(
+          '/api/behavior/score',
+          {
+            examId,
+            studentId: user._id,
+            events: payload.events || [],
+            ...payload
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` }
           }
+        );
+      } catch (err) {
+        // Non-blocking for students
+        console.warn('[BioAuth LMS Sync] Sync error:', err.message);
+      }
+    };
+
+    // Initialize Universal Client SDK (Approach A)
+    let isMounted = true;
+
+    // Immediately sync student's authentic model baseline (e.g. 'full') to proctor control room
+    fetchBiometricStatus(user._id).then(status => {
+      if (!isMounted) return;
+      syncWithProctor({
+        modelState: status?.state || 'ready',
+        events: []
+      });
+    }).catch(() => {});
+
+    startBiometricExamSession(user._id, {
+      examId: examId || 'exam_' + Date.now(),
+      intervalMs: 5000,
+      onScore: (scoreData) => {
+        if (!isMounted) return;
+        console.log('[BioAuth SDK] Live verification result:', scoreData);
+
+        if (scoreData.action === 'deny' || scoreData.risk_level === 'high') {
+          showWarningToast('Biometric Rhythm Anomaly: Unrecognized typing dynamics detected.');
         }
 
-        const res = await axios.post(endpoint, payload, {
-          headers: { Authorization: `Bearer ${token}` }
+        // Notify teacher proctor dashboard
+        syncWithProctor({
+          mockTime: Date.now(),
+          scoreData,
+          events: [{ type: 'keydown', key: 'x', timestamp: Date.now() }, { type: 'keyup', key: 'x', timestamp: Date.now() }]
         });
-        console.log(`[BehaviorTracking] Server response:`, res.data);
-      } catch (error) {
-        console.error('[BehaviorTracking] Telemetry send failed:', error?.response?.data || error.message);
-      }
-    };
+      },
+      onViolation: (violation) => {
+        if (!isMounted) return;
+        console.warn('[BioAuth SDK] Security flag:', violation);
 
-    // Store in ref so event handlers registered before sendWindow reference it
-    sendWindowRef.current = sendWindow;
+        let msg = 'Exam Rule Violation Detected';
+        let alertType = 'rule_violation';
+        let fakeEvents = [];
 
-    // ─── MOUSE / KEYBOARD EVENTS ─────────────────────────────────────────────
-    const handleEvent = (e) => {
-      const eventData = {
-        type: e.type,
-        timestamp: Date.now(),
-      };
-
-      if (e.type === 'keydown' || e.type === 'keyup') {
-        eventData.key = e.key;
-
-        // Fallback for Ctrl+V or Cmd+V paste shortcut
-        if (e.type === 'keydown' && (e.key === 'v' || e.key === 'V') && (e.ctrlKey || e.metaKey)) {
-          const now = Date.now();
-          const lastEvent = eventsBuffer.current[eventsBuffer.current.length - 1];
-          if (!lastEvent || lastEvent.type !== 'paste' || (now - lastEvent.timestamp > 300)) {
-            eventsBuffer.current.push({
-              type: 'paste',
-              timestamp: now,
-              length: 50
-            });
-            console.log('[BehaviorTracking] PASTE detected via Ctrl+V / Cmd+V shortcut');
-            setTimeout(() => sendWindowRef.current?.(true), 10);
-          }
+        if (violation.type === 'tab_switch') {
+          msg = 'Tab or Window Switch Detected! This event is logged by proctor.';
+          alertType = 'tab_switch';
+          fakeEvents = [{ type: 'visibilitychange', hidden: true, timestamp: Date.now() }];
+        } else if (violation.type === 'paste_detected') {
+          msg = `Paste Detected (${violation.length || 0} chars)! Pasting is monitored.`;
+          alertType = 'paste_detected';
+          fakeEvents = [{ type: 'paste', length: violation.length || 1, timestamp: Date.now() }];
+        } else if (violation.type === 'copy_detected') {
+          msg = `Copy Detected (${violation.length || 0} chars)! Copying is monitored.`;
+          alertType = 'copy_detected';
+          fakeEvents = [{ type: 'copy', length: violation.length || 1, timestamp: Date.now() }];
+        } else if (violation.type === 'biometric_anomaly') {
+          msg = 'Biometric Deviation: Keystroke cadence deviated from authentic profile.';
         }
-      } else if (e.type === 'mousemove' || e.type === 'pointermove') {
-        eventData.type = 'mousemove';
-        eventData.x = e.clientX;
-        eventData.y = e.clientY;
-        if (e.pointerType) pointerTypes.current.add(e.pointerType);
+
+        showWarningToast(msg);
+
+        // Notify teacher proctor dashboard immediately
+        if (fakeEvents.length > 0) {
+          syncWithProctor({
+            events: fakeEvents
+          });
+        }
       }
+    }).catch(err => console.error('[BioAuth SDK] Failed to start exam session:', err));
 
-      eventsBuffer.current.push(eventData);
-    };
-
-    let lastMouseMove = 0;
-    const throttledMouseMove = (e) => {
-      const now = Date.now();
-      if (now - lastMouseMove > 100) {
-        handleEvent(e);
-        lastMouseMove = now;
-      }
-    };
-
-    const handleClick = (e) => {
-      eventsBuffer.current.push({ type: 'click', timestamp: Date.now() });
-      if (e.pointerType) pointerTypes.current.add(e.pointerType);
-    };
-
-    window.addEventListener('keydown', handleEvent);
-    window.addEventListener('keyup', handleEvent);
-    if (window.PointerEvent) {
-      window.addEventListener('pointermove', throttledMouseMove);
-    } else {
-      window.addEventListener('mousemove', throttledMouseMove);
-    }
-    window.addEventListener('click', handleClick);
-
-    // ─── PASTE DETECTION ─────────────────────────────────────────────────────
-    const handlePaste = (e) => {
-      // Ignore paste inside the PIN input box
-      if (e.target && (e.target.tagName === 'INPUT' || e.target.closest?.('.session-pin-input'))) {
-        return;
-      }
-
-      const lastEvent = eventsBuffer.current[eventsBuffer.current.length - 1];
-      const now = Date.now();
-      // Deduplicate within 300ms
-      if (lastEvent && lastEvent.type === 'paste' && (now - lastEvent.timestamp < 300)) {
-        return;
-      }
-
-      const pastedText = e.clipboardData?.getData('text') || '';
-      eventsBuffer.current.push({
-        type: 'paste',
-        timestamp: now,
-        length: pastedText.length || 50
-      });
-
-      console.log('[BehaviorTracking] PASTE detected, length:', pastedText.length || 50);
-      // Use ref so this closure always calls the latest sendWindow
-      setTimeout(() => sendWindowRef.current?.(true), 10);
-    };
-
-    // Capture phase so Monaco Editor internal handlers don't swallow it
-    document.addEventListener('paste', handlePaste, true);
-
-    // ─── TAB SWITCH / WINDOW BLUR DETECTION ──────────────────────────────────
-    const recordTabBlur = (source) => {
-      const lastEvent = eventsBuffer.current[eventsBuffer.current.length - 1];
-      const now = Date.now();
-      // Debounce: both blur + visibilitychange fire together; only record once per 300ms
-      if (
-        lastEvent &&
-        lastEvent.type === 'visibilitychange' &&
-        lastEvent.hidden &&
-        now - lastEvent.timestamp < 300
-      ) {
-        return;
-      }
-
-      eventsBuffer.current.push({
-        type: 'visibilitychange',
-        hidden: true,
-        source,
-        timestamp: now
-      });
-
-      console.log(`[BehaviorTracking] TAB/WINDOW BLUR detected (source: ${source}), forcing send`);
-      // Use ref so this closure always calls the latest sendWindow
-      setTimeout(() => sendWindowRef.current?.(true), 10);
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        recordTabBlur('visibilitychange');
-      }
-    };
-
-    const handleWindowBlur = () => {
-      recordTabBlur('blur');
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('blur', handleWindowBlur);
-
-    // ─── PERIODIC SEND ───────────────────────────────────────────────────────
-    windowTimer.current = setInterval(() => sendWindowRef.current?.(false), 5000);
-
-    // ─── CLEANUP ─────────────────────────────────────────────────────────────
     return () => {
-      window.removeEventListener('keydown', handleEvent);
-      window.removeEventListener('keyup', handleEvent);
-      if (window.PointerEvent) {
-        window.removeEventListener('pointermove', throttledMouseMove);
-      } else {
-        window.removeEventListener('mousemove', throttledMouseMove);
-      }
-      window.removeEventListener('click', handleClick);
-      window.removeEventListener('blur', handleWindowBlur);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      document.removeEventListener('paste', handlePaste, true);
-      if (windowTimer.current) {
-        clearInterval(windowTimer.current);
-      }
+      isMounted = false;
+      stopBiometricExamSession();
+
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      const toast = document.getElementById('behavior-violation-toast');
+      if (toast) toast.remove();
     };
   }, [user, token, context, examId]);
 };

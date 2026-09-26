@@ -6,7 +6,7 @@ The project highlights two major biometric-rich environments:
 1. **Coding Practice Sandbox**: A LeetCode-style split-pane environment featuring an embedded **Monaco Editor** where users solve programming challenges that execute on a sandboxed Node.js VM.
 2. **Timed Quizzes**: An exam interface with timed controls, question navigation, flag-for-review matrices, and auto-grading.
 
----
+--------
 
 ## 🚀 Key Features
 

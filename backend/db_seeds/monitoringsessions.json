@@ -1,0 +1,56 @@
+[
+  {
+    "_id": "6a6432f677bb35a4f10a323e",
+    "title": "devops",
+    "course": "6a6431cc77bb35a4f10a3239",
+    "teacher": "6a642f8077bb35a4f10a3238",
+    "enrolledStudents": [],
+    "quiz": "6a6432f677bb35a4f10a323a",
+    "assignment": null,
+    "durationMinutes": 30,
+    "sessionPassword": "",
+    "blacklistedApps": [
+      "chrome",
+      "discord",
+      "vscode"
+    ],
+    "blacklistedKeywords": [
+      "chatgpt",
+      "stackoverflow",
+      "solution"
+    ],
+    "behavioralMonitoring": true,
+    "status": "ended",
+    "createdAt": "2026-07-25T03:52:22.406Z",
+    "updatedAt": "2026-07-25T05:03:20.970Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a64448579226f1146063988",
+    "title": "devops exit assessment",
+    "course": "6a6431cc77bb35a4f10a3239",
+    "teacher": "6a642f8077bb35a4f10a3238",
+    "enrolledStudents": [
+      "6a6435d177bb35a4f10a3263"
+    ],
+    "quiz": "6a64448379226f1146063984",
+    "assignment": null,
+    "durationMinutes": 30,
+    "sessionPassword": "$2b$10$R1/y5bK4TjkL4NMNfeGj9u5uHVf6JmsrNvPEJ6fnWadtk9xN.GIfK",
+    "blacklistedApps": [
+      "chrome",
+      "discord",
+      "vscode"
+    ],
+    "blacklistedKeywords": [
+      "chatgpt",
+      "stackoverflow",
+      "solution"
+    ],
+    "behavioralMonitoring": true,
+    "status": "active",
+    "createdAt": "2026-07-25T05:07:17.017Z",
+    "updatedAt": "2026-07-25T05:09:44.807Z",
+    "__v": 0
+  }
+]

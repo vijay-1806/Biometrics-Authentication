@@ -1,0 +1,281 @@
+[
+  {
+    "_id": "6ab762f80bd68165000ddb82",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "tab_switch",
+    "score": null,
+    "topDeviatingFeatures": {
+      "tabBlurCount": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:15:20.840Z",
+    "updatedAt": "2026-09-26T06:15:20.840Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab762ff0bd68165000ddb83",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "behavioral_anomaly",
+    "score": 20,
+    "topDeviatingFeatures": [
+      "Low trust score, single sample — not yet sustained."
+    ],
+    "reviewed": false,
+    "notes": "",
+    "severity": "medium",
+    "createdAt": "2026-09-26T06:15:27.354Z",
+    "updatedAt": "2026-09-26T06:15:27.354Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab7633b0bd68165000ddb84",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "tab_switch",
+    "score": null,
+    "topDeviatingFeatures": {
+      "tabBlurCount": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:16:27.700Z",
+    "updatedAt": "2026-09-26T06:16:27.700Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab7672f0bd68165000ddb85",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "tab_switch",
+    "score": null,
+    "topDeviatingFeatures": {
+      "tabBlurCount": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:33:19.859Z",
+    "updatedAt": "2026-09-26T06:33:19.859Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab7673e0bd68165000ddb8e",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "behavioral_anomaly",
+    "score": 20,
+    "topDeviatingFeatures": [
+      "Trust score stayed low across multiple samples."
+    ],
+    "reviewed": false,
+    "notes": "",
+    "severity": "high",
+    "createdAt": "2026-09-26T06:33:34.448Z",
+    "updatedAt": "2026-09-26T06:33:34.448Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab767400bd68165000ddb8f",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "tab_switch",
+    "score": null,
+    "topDeviatingFeatures": {
+      "tabBlurCount": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:33:36.804Z",
+    "updatedAt": "2026-09-26T06:33:36.804Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab767860bd68165000ddb90",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "copy_detected",
+    "score": null,
+    "topDeviatingFeatures": {
+      "copyCount": 1,
+      "totalCopiedChars": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:34:46.752Z",
+    "updatedAt": "2026-09-26T06:34:46.752Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab767870bd68165000ddb91",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "copy_detected",
+    "score": null,
+    "topDeviatingFeatures": {
+      "copyCount": 1,
+      "totalCopiedChars": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:34:47.190Z",
+    "updatedAt": "2026-09-26T06:34:47.190Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab767870bd68165000ddb92",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "copy_detected",
+    "score": null,
+    "topDeviatingFeatures": {
+      "copyCount": 1,
+      "totalCopiedChars": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:34:47.629Z",
+    "updatedAt": "2026-09-26T06:34:47.629Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab767880bd68165000ddb93",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "copy_detected",
+    "score": null,
+    "topDeviatingFeatures": {
+      "copyCount": 1,
+      "totalCopiedChars": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:34:48.136Z",
+    "updatedAt": "2026-09-26T06:34:48.136Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab767890bd68165000ddb94",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "paste_detected",
+    "score": null,
+    "topDeviatingFeatures": {
+      "pasteCount": 1,
+      "totalPastedChars": 40
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "medium",
+    "createdAt": "2026-09-26T06:34:49.487Z",
+    "updatedAt": "2026-09-26T06:34:49.487Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab7678a0bd68165000ddb95",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "paste_detected",
+    "score": null,
+    "topDeviatingFeatures": {
+      "pasteCount": 1,
+      "totalPastedChars": 40
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "medium",
+    "createdAt": "2026-09-26T06:34:50.117Z",
+    "updatedAt": "2026-09-26T06:34:50.117Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab7678a0bd68165000ddb96",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "paste_detected",
+    "score": null,
+    "topDeviatingFeatures": {
+      "pasteCount": 1,
+      "totalPastedChars": 40
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "medium",
+    "createdAt": "2026-09-26T06:34:50.446Z",
+    "updatedAt": "2026-09-26T06:34:50.446Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab7678d0bd68165000ddb97",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "tab_switch",
+    "score": null,
+    "topDeviatingFeatures": {
+      "tabBlurCount": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:34:53.101Z",
+    "updatedAt": "2026-09-26T06:34:53.101Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab7678e0bd68165000ddb98",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "behavioral_anomaly",
+    "score": 20,
+    "topDeviatingFeatures": [
+      "Trust score stayed low across multiple samples."
+    ],
+    "reviewed": false,
+    "notes": "",
+    "severity": "high",
+    "createdAt": "2026-09-26T06:34:54.461Z",
+    "updatedAt": "2026-09-26T06:34:54.461Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab767be0bd68165000ddb99",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "tab_switch",
+    "score": null,
+    "topDeviatingFeatures": {
+      "tabBlurCount": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:35:42.865Z",
+    "updatedAt": "2026-09-26T06:35:42.865Z",
+    "__v": 0
+  }
+]

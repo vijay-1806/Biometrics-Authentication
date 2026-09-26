@@ -22,7 +22,7 @@ const initSocket = (server) => {
     console.log(`Socket connected: ${socket.id}`);
 
     // Teacher creates or re-attaches to a session
-    socket.on('create-session', ({ examId, pin }) => {
+    socket.on('create-session', async ({ examId, pin }) => {
       if (!pin) return;
       const pinStr = String(pin).trim();
       let session = sessions[pinStr];
@@ -33,7 +33,9 @@ const initSocket = (server) => {
         if (examId) session.examId = String(examId);
         socketToPin[socket.id] = pinStr;
         socket.join(pinStr);
-        socket.join(`assessment-session:${session.assessmentSessionId}`);
+        if (session.assessmentSessionId) {
+          socket.join(`assessment-session:${session.assessmentSessionId}`);
+        }
         console.log(`Teacher re-attached to session ${pinStr} (assessmentSessionId: ${session.assessmentSessionId})`);
         
         const uniqueStudentsMap = {};
@@ -57,14 +59,28 @@ const initSocket = (server) => {
         assessmentSessionId,
         sessionPin: pinStr,
         teacherSocketId: socket.id,
-        examId: String(examId),
+        examId: String(examId || ''),
         status: 'waiting',
         students: {}
       };
+
       socketToPin[socket.id] = pinStr;
       socket.join(pinStr);
       socket.join(`assessment-session:${assessmentSessionId}`);
       console.log(`Teacher created new session ${pinStr} (assessmentSessionId: ${assessmentSessionId}) for exam ${examId}`);
+
+      try {
+        const BehaviorSession = require('./models/BehaviorSession');
+        const BehaviorAlert = require('./models/BehaviorAlert');
+        if (examId) {
+          await BehaviorSession.deleteMany({ exam: examId });
+          await BehaviorAlert.deleteMany({ exam: examId.toString() });
+          console.log(`Reset previous behavior session data for exam ${examId}`);
+        }
+      } catch (err) {
+        console.error('Error resetting previous behavior sessions:', err.message);
+      }
+
       socket.emit('session-created', { pin: pinStr, assessmentSessionId, status: 'waiting', students: [] });
     });
 
@@ -91,9 +107,11 @@ const initSocket = (server) => {
       session.students[socket.id] = student;
       socketToPin[socket.id] = pinStr;
       socket.join(pinStr);
-      socket.join(`assessment-session:${session.assessmentSessionId}`);
+      if (session.assessmentSessionId) {
+        socket.join(`assessment-session:${session.assessmentSessionId}`);
+      }
 
-      console.log(`Student ${student.name} (${studentIdStr}) joined session ${pinStr} (assessmentSessionId: ${session.assessmentSessionId})`);
+      console.log(`Student ${student.name} (${studentIdStr}) joined session ${pinStr}`);
 
       // Deduplicate student objects by ID for teacher broadcast
       const uniqueStudentsMap = {};
@@ -117,14 +135,29 @@ const initSocket = (server) => {
     });
 
     // Teacher starts the exam
-    socket.on('start-exam', ({ pin }) => {
+    socket.on('start-exam', async ({ pin }) => {
       const pinStr = String(pin || '').trim();
       const session = sessions[pinStr];
       if (session) {
         session.status = 'active';
+
+        try {
+          const BehaviorSession = require('./models/BehaviorSession');
+          const BehaviorAlert = require('./models/BehaviorAlert');
+          if (session.examId) {
+            await BehaviorSession.deleteMany({ exam: session.examId });
+            await BehaviorAlert.deleteMany({ exam: session.examId.toString() });
+            console.log(`Reset previous behavior session data on start-exam for ${session.examId}`);
+          }
+        } catch (err) {
+          console.error('Error resetting behavior session data on start-exam:', err.message);
+        }
+
         io.to(pinStr).emit('exam-started', { examId: session.examId, assessmentSessionId: session.assessmentSessionId, pin: pinStr });
-        io.to(`assessment-session:${session.assessmentSessionId}`).emit('exam-started', { examId: session.examId, assessmentSessionId: session.assessmentSessionId, pin: pinStr });
-        console.log(`Exam started for session ${pinStr} (assessmentSessionId: ${session.assessmentSessionId})`);
+        if (session.assessmentSessionId) {
+          io.to(`assessment-session:${session.assessmentSessionId}`).emit('exam-started', { examId: session.examId, assessmentSessionId: session.assessmentSessionId, pin: pinStr });
+        }
+        console.log(`Exam started for session ${pinStr}`);
       }
     });
 
@@ -135,7 +168,9 @@ const initSocket = (server) => {
       if (session) {
         session.status = 'ended';
         io.to(pinStr).emit('session-ended');
-        io.to(`assessment-session:${session.assessmentSessionId}`).emit('session-ended');
+        if (session.assessmentSessionId) {
+          io.to(`assessment-session:${session.assessmentSessionId}`).emit('session-ended');
+        }
         delete sessions[pinStr];
         console.log(`Session ${pinStr} officially ENDED and removed by instructor.`);
       }
@@ -149,7 +184,6 @@ const initSocket = (server) => {
 
         if (session.teacherSocketId === socket.id) {
           console.log(`Teacher page refresh/disconnect from session ${pin}. Preserving active session state.`);
-          // Preserve session so F5 refresh doesn't destroy the active exam for teacher/students
         } else if (session.students[socket.id]) {
           console.log(`Student disconnected from session ${pin}`);
           delete session.students[socket.id];
@@ -197,7 +231,9 @@ const broadcastAnomaly = (examId, studentId, alertPayload, assessmentSessionId =
     const isStudentInSession = Object.values(session.students || {}).some(
       s => String(s._id || s.id || '') === studentIdStr
     );
-    if (isStudentInSession) {
+    const matchesExam = session.examId && String(session.examId) === String(examId);
+
+    if (isStudentInSession || matchesExam) {
       if (session.assessmentSessionId) {
         io.to(`assessment-session:${session.assessmentSessionId}`).emit('student-anomaly', {
           studentId: studentIdStr,
@@ -227,13 +263,15 @@ const broadcastLiveScore = (examId, studentId, data, assessmentSessionId = null)
     return;
   }
 
-  // Scoped fallback lookup by student membership in active session (prevents global iteration leak)
+  // Scoped fallback lookup by student membership or exam in active session
   for (const pin in sessions) {
     const session = sessions[pin];
     const isStudentInSession = Object.values(session.students || {}).some(
       s => String(s._id || s.id || '') === studentIdStr
     );
-    if (isStudentInSession) {
+    const matchesExam = session.examId && String(session.examId) === String(examId);
+
+    if (isStudentInSession || matchesExam) {
       if (session.assessmentSessionId) {
         io.to(`assessment-session:${session.assessmentSessionId}`).emit('live_score', {
           studentId: studentIdStr,

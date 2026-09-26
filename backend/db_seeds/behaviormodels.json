@@ -1,0 +1,14 @@
+[
+  {
+    "_id": "6a92683a7e77cbd6c3c3e887",
+    "student": "6a9268397e77cbd6c3c3e886",
+    "status": "ready",
+    "modelPath": "C:\\Users\\vijay\\OneDrive\\文档\\CLG - PROJECTS\\BIOMETRICS_API\\Biometrics-Authentication\\behavioral-auth-ml-service\\models\\6a9268397e77cbd6c3c3e886.joblib",
+    "trainedAt": "2026-08-29T06:21:33.008Z",
+    "trainingWindowCount": 28,
+    "personalThreshold": 0.5,
+    "createdAt": "2026-08-29T05:03:54.107Z",
+    "updatedAt": "2026-09-11T07:32:02.793Z",
+    "__v": 0
+  }
+]

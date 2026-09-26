@@ -2,15 +2,22 @@ const mongoose = require('mongoose');
 
 const behaviorSessionSchema = new mongoose.Schema(
   {
+    _id: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => new mongoose.Types.ObjectId().toString(),
+    },
     student: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.Mixed,
       ref: 'User',
       required: true,
     },
     exam: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Quiz',
+      type: mongoose.Schema.Types.Mixed, // Quiz or Assignment ID
       required: false,
+    },
+    session: {
+      type: String, // Unique session identifier for each exam run
+      index: true,
     },
     smoothedScore: {
       type: Number,
@@ -32,6 +39,18 @@ const behaviorSessionSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    tabBlurCount: {
+      type: Number,
+      default: 0,
+    },
+    pasteCount: {
+      type: Number,
+      default: 0,
+    },
+    copyCount: {
+      type: Number,
+      default: 0,
+    },
     deviceInfo: {
       type: mongoose.Schema.Types.Mixed,
     },
@@ -41,14 +60,6 @@ const behaviorSessionSchema = new mongoose.Schema(
     deviceChangeFlagged: {
       type: Boolean,
       default: false,
-    },
-    tabBlurCount: {
-      type: Number,
-      default: 0,
-    },
-    pasteCount: {
-      type: Number,
-      default: 0,
     },
     assessmentSessionId: {
       type: String,

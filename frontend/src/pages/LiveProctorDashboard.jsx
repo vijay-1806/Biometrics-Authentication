@@ -1,721 +1,684 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
-import { 
-  Shield, 
-  UserCheck, 
-  Eye, 
-  Zap, 
-  Bell, 
-  AlertTriangle, 
-  Clock, 
-  Activity, 
-  Layers, 
-  CheckCircle2, 
-  XCircle, 
-  StopCircle, 
-  X, 
-  ChevronRight, 
-  Users, 
-  Wifi, 
-  WifiOff 
+import Layout from '../components/Common/Layout';
+import {
+  Shield, AlertTriangle, UserCheck, Eye, RefreshCw, Zap,
+  CheckCircle2, XCircle, Clock, Monitor, Copy, Clipboard,
+  ChevronRight, Activity, BarChart2, BookOpen, Code2
 } from 'lucide-react';
-import BehaviorReportModal from '../components/Common/BehaviorReportModal';
 
+// ─── Helpers ──────────────────────────────────────────────────────────────
+const getRiskColor = (level) => {
+  if (level === 'high')   return { bg: '#fff1f2', text: '#e11d48', border: '#fecdd3' };
+  if (level === 'medium') return { bg: '#fffbeb', text: '#d97706', border: '#fde68a' };
+  if (level === 'low')    return { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' };
+  return { bg: '#f8fafc', text: '#475569', border: '#e2e8f0' };
+};
+
+const RiskBadge = ({ level }) => {
+  const c = getRiskColor(level);
+  const label = level ? level.charAt(0).toUpperCase() + level.slice(1) : 'Normal';
+  return (
+    <span className="lms-badge" style={{ background: c.bg, color: c.text, borderColor: c.border }}>
+      {level === 'high' && <span className="dot-pulse w-1.5 h-1.5 rounded-full inline-block mr-1" style={{ background: c.text }} />}
+      {label}
+    </span>
+  );
+};
+
+const TrustBar = ({ score }) => {
+  const pct = Math.min(100, Math.max(0, Math.round(score)));
+  const color = pct >= 70 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444';
+  const textColor = pct >= 70 ? '#16a34a' : pct >= 40 ? '#d97706' : '#dc2626';
+  return (
+    <div className="space-y-1 min-w-[120px]">
+      <div className="flex justify-between text-xs">
+        <span className="text-slate-500">Trust</span>
+        <span className="font-black" style={{ color: textColor }}>{pct}/100</span>
+      </div>
+      <div className="progress-bar">
+        <div className="progress-fill" style={{ width: `${pct}%`, background: color }} />
+      </div>
+    </div>
+  );
+};
+
+const StatChip = ({ value, label, alert, color }) => (
+  <div className="text-center px-3 py-2 rounded-xl border" style={{
+    background: (alert && value > 0) ? (color?.bg || '#fff1f2') : '#f8fafc',
+    borderColor: (alert && value > 0) ? (color?.border || '#fecdd3') : '#e2e8f0'
+  }}>
+    <p className="text-lg font-black" style={{ color: (alert && value > 0) ? (color?.text || '#e11d48') : '#1e293b' }}>
+      {value}
+    </p>
+    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{label}</p>
+  </div>
+);
+
+const getReason = (alert) => {
+  if (alert.alertType === 'behavioral_anomaly') return 'Typing rhythm or mouse kinetics deviated from historical baseline.';
+  if (alert.alertType === 'paste_detected') return `Student pasted ${alert.topDeviatingFeatures?.totalPastedChars || ''} characters.`;
+  if (alert.alertType === 'copy_detected') return `Student copied ${alert.topDeviatingFeatures?.totalCopiedChars || ''} characters from exam.`;
+  if (alert.alertType === 'device_change') return 'Student changed devices or resolution mid-exam.';
+  if (alert.alertType === 'tab_switch') return `Student switched away from exam tab (${alert.topDeviatingFeatures?.tabBlurCount || ''}×).`;
+  return 'Unknown anomaly detected.';
+};
+
+// ─── Student Row ──────────────────────────────────────────────────────────
+const StudentRow = ({ student, live, alertCount, sessionActive, onInspect, onRetrain }) => {
+  const studentId = student._id || student.id;
+  const trustScore = live?.trustScore ?? (live?.smoothedScore > 0 ? live.smoothedScore : null);
+  const score = trustScore !== null ? Math.round(trustScore) : null;
+  const modelState = live?.state || 'ready';
+
+  const modelBadge = modelState === 'full'
+    ? { label: 'Full (20/20)', cls: 'badge-green' }
+    : modelState === 'provisional'
+    ? { label: 'Provisional', cls: 'badge-amber' }
+    : { label: 'Collecting', cls: 'badge-slate' };
+
+  return (
+    <tr>
+      {/* Student */}
+      <td>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+            style={{ background: '#e0e7ff', color: '#4338ca' }}>
+            {student.name?.slice(0, 2).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="font-bold text-slate-900 text-sm truncate">{student.name}</p>
+            <p className="text-[11px] text-slate-500 truncate">{student.email}</p>
+          </div>
+        </div>
+      </td>
+
+      {/* Model */}
+      <td><span className={`lms-badge ${modelBadge.cls}`}>{modelBadge.label}</span></td>
+
+      {/* Trust Score */}
+      <td>
+        {score !== null ? <TrustBar score={score} /> :
+         sessionActive ? <span className="text-xs text-slate-400 italic">Sampling...</span> :
+         <span className="text-xs text-slate-400">Waiting...</span>}
+      </td>
+
+      {/* Risk */}
+      <td><RiskBadge level={live?.riskLevel} /></td>
+
+      {/* Behavioral Metrics */}
+      <td>
+        <div className="flex gap-1.5">
+          <StatChip value={live?.tabBlurCount || 0} label="Tabs" alert color={{ bg: '#fff1f2', text: '#e11d48', border: '#fecdd3' }} />
+          <StatChip value={live?.pasteCount || 0} label="Paste" alert color={{ bg: '#fffbeb', text: '#d97706', border: '#fde68a' }} />
+          <StatChip value={live?.copyCount || 0} label="Copy" alert color={{ bg: '#faf5ff', text: '#7c3aed', border: '#e9d5ff' }} />
+        </div>
+      </td>
+
+      {/* Alerts */}
+      <td className="text-center">
+        {alertCount > 0 ? (
+          <span className="lms-badge badge-red">
+            <AlertTriangle size={11} />
+            {alertCount}
+          </span>
+        ) : (
+          <span className="lms-badge badge-green"><CheckCircle2 size={11} /> 0</span>
+        )}
+      </td>
+
+      {/* Status */}
+      <td className="text-center">
+        <span className="lms-badge badge-green">
+          <span className="dot-pulse w-1.5 h-1.5 rounded-full inline-block" style={{ background: '#22c55e' }} />
+          Active
+        </span>
+      </td>
+
+      {/* Actions */}
+      <td>
+        <div className="flex items-center gap-1.5 justify-end">
+          <button
+            onClick={() => onRetrain(studentId)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
+            style={{ border: '1px solid #c7d2fe' }}
+            title="Retrain model on verified sessions"
+          >
+            <RefreshCw size={12} /> Retrain
+          </button>
+          <button
+            onClick={() => onInspect(student)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+            style={{ border: '1px solid #e2e8f0' }}
+          >
+            <Eye size={12} /> Inspect
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+};
+
+// ─── Inspect Modal ─────────────────────────────────────────────────────────
+const InspectModal = ({ student, live, alerts, onClose }) => {
+  if (!student) return null;
+  const studentId = student._id || student.id;
+  const trustScore = live?.trustScore ?? live?.smoothedScore ?? null;
+  const score = trustScore !== null ? Math.round(trustScore) : null;
+
+  const metrics = [
+    { label: 'Trust Score', value: score !== null ? `${score}/100` : 'Sampling...', icon: <Activity size={16} className="text-brand-600" /> },
+    { label: 'Risk Level', value: live?.riskLevel ? live.riskLevel.charAt(0).toUpperCase() + live.riskLevel.slice(1) : 'Normal', icon: <Shield size={16} className="text-slate-500" /> },
+    { label: 'Tab Switches', value: `${live?.tabBlurCount || 0}×`, icon: <Monitor size={16} className="text-slate-500" /> },
+    { label: 'Paste Events', value: `${live?.pasteCount || 0}×`, icon: <Clipboard size={16} className="text-amber-500" /> },
+    { label: 'Copy Events', value: `${live?.copyCount || 0}×`, icon: <Copy size={16} className="text-purple-500" /> },
+    { label: 'Alerts Fired', value: alerts.length, icon: <AlertTriangle size={16} className="text-rose-500" /> },
+  ];
+
+  return (
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box max-w-lg p-7 space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center font-bold text-base"
+              style={{ background: '#e0e7ff', color: '#4338ca' }}>
+              {student.name?.slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <h3 className="font-black text-lg text-slate-900">{student.name}</h3>
+              <p className="text-xs text-slate-500">{student.email}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 transition-colors">
+            <XCircle size={20} />
+          </button>
+        </div>
+
+        {/* Metrics Grid */}
+        <div className="grid grid-cols-3 gap-3">
+          {metrics.map((m, i) => (
+            <div key={i} className="p-3 rounded-xl text-center" style={{ background: '#f8fafc', border: '1.5px solid #eaeef5' }}>
+              <div className="flex justify-center mb-1">{m.icon}</div>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{m.label}</p>
+              <p className={`font-black text-lg ${i === 0 && score !== null ?
+                (score >= 70 ? 'text-green-600' : score >= 40 ? 'text-amber-600' : 'text-red-600')
+                : 'text-slate-900'}`}>
+                {m.value}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* Trust bar */}
+        {score !== null && (
+          <div>
+            <div className="flex justify-between text-sm font-semibold mb-2">
+              <span className="text-slate-700">Overall Trust Score</span>
+              <span style={{ color: score >= 70 ? '#16a34a' : score >= 40 ? '#d97706' : '#dc2626' }}>{score}%</span>
+            </div>
+            <div className="progress-bar h-3 rounded-xl">
+              <div className="progress-fill rounded-xl" style={{
+                width: `${score}%`,
+                background: score >= 70 ? 'linear-gradient(90deg,#4ade80,#22c55e)' : score >= 40 ? 'linear-gradient(90deg,#fbbf24,#f59e0b)' : 'linear-gradient(90deg,#f87171,#ef4444)'
+              }} />
+            </div>
+            <div className="flex justify-between text-xs text-slate-400 mt-1">
+              <span>Suspicious (0)</span>
+              <span className="text-amber-600">Borderline (40)</span>
+              <span className="text-green-600">Trusted (70+)</span>
+            </div>
+          </div>
+        )}
+
+        {/* Violations */}
+        <div>
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+            Activity Log ({alerts.length} events)
+          </h4>
+          <div className="max-h-36 overflow-y-auto space-y-1.5">
+            {alerts.length === 0 ? (
+              <div className="text-center py-5 text-slate-400">
+                <CheckCircle2 size={24} className="mx-auto text-slate-300 mb-1" />
+                <p className="text-xs font-medium">No anomalies logged.</p>
+              </div>
+            ) : alerts.map((alert, idx) => (
+              <div key={idx} className="flex items-start justify-between gap-2 p-2.5 rounded-xl text-xs"
+                style={{ background: '#fff1f2', border: '1px solid #fecdd3' }}>
+                <div className="flex items-start gap-1.5">
+                  <AlertTriangle size={12} className="text-rose-500 flex-shrink-0 mt-0.5" />
+                  <span className="text-rose-700 font-medium">{getReason(alert)}</span>
+                </div>
+                <span className="text-slate-400 font-mono whitespace-nowrap flex-shrink-0">
+                  {new Date(alert.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-1 border-t border-slate-100">
+          <button onClick={onClose}
+            className="px-5 py-2 rounded-xl font-semibold text-sm text-slate-600 hover:bg-slate-100 transition-colors"
+            style={{ border: '1.5px solid #e2e8f0' }}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Main Component ─────────────────────────────────────────────────────────
 export default function LiveProctorDashboard() {
   const [courses, setCourses] = useState([]);
   const [assessments, setAssessments] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState('');
   const [selectedAssessment, setSelectedAssessment] = useState('');
-  const [selectedAssessmentData, setSelectedAssessmentData] = useState(null);
 
   const [sessionPin, setSessionPin] = useState(null);
-  const [assessmentSessionId, setAssessmentSessionId] = useState(null);
-  const [sessionState, setSessionState] = useState('WAITING'); // WAITING, ACTIVE, ENDED
+  const [sessionActive, setSessionActive] = useState(false);
   const [students, setStudents] = useState([]);
+  const [liveAlerts, setLiveAlerts] = useState([]);
   const [liveScores, setLiveScores] = useState({});
-  const [riskNotifications, setRiskNotifications] = useState([]);
-  const [selectedStudentForModal, setSelectedStudentForModal] = useState(null);
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [reportStudent, setReportStudent] = useState(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [inspectedStudent, setInspectedStudent] = useState(null);
+  const [pendingJoins, setPendingJoins] = useState([]);
 
   const socketRef = useRef(null);
-  const prevRiskMapRef = useRef({});
-  const timerRef = useRef(null);
 
-  // Restore active proctor session on page refresh (F5 resilience)
-  useEffect(() => {
-    const savedPin = sessionStorage.getItem('activeProctorPin');
-    const savedAssessment = sessionStorage.getItem('activeProctorAssessment');
-    const savedState = sessionStorage.getItem('activeProctorState');
-    if (savedPin && savedAssessment) {
-      setSessionPin(savedPin);
-      setSelectedAssessment(savedAssessment);
-      setSessionState(savedState || 'ACTIVE');
-    }
-  }, []);
-
-  useEffect(() => {
-    if (sessionPin && sessionState !== 'ENDED') {
-      sessionStorage.setItem('activeProctorPin', sessionPin);
-      sessionStorage.setItem('activeProctorAssessment', selectedAssessment);
-      sessionStorage.setItem('activeProctorState', sessionState);
-    } else if (sessionState === 'ENDED') {
-      sessionStorage.removeItem('activeProctorPin');
-      sessionStorage.removeItem('activeProctorAssessment');
-      sessionStorage.removeItem('activeProctorState');
-    }
-  }, [sessionPin, selectedAssessment, sessionState]);
-
-  // Initial fetch for courses
   useEffect(() => {
     axios.get('/api/courses', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
       .then(res => setCourses(res.data))
       .catch(console.error);
   }, []);
 
-  // Fetch assessments when course changes
   useEffect(() => {
     if (selectedCourse) {
       axios.get(`/api/courses/${selectedCourse}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
         .then(res => {
-          const courseQuizzes = res.data.quizzes?.map(q => ({ ...q, type: 'Quiz' })) || [];
+          // Only code assignments, no quizzes
           const courseAssignments = res.data.assignments?.map(a => ({ ...a, type: 'Assignment' })) || [];
-          setAssessments([...courseQuizzes, ...courseAssignments]);
-        })
-        .catch(console.error);
+          setAssessments(courseAssignments);
+        }).catch(console.error);
     } else {
       setAssessments([]);
     }
   }, [selectedCourse]);
 
-  // Timer effect for session elapsed time
-  useEffect(() => {
-    if (sessionState === 'ACTIVE') {
-      timerRef.current = setInterval(() => {
-        setElapsedSeconds(prev => prev + 1);
-      }, 1000);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [sessionState]);
-
-  // Handle Socket Events
   useEffect(() => {
     if (sessionPin) {
-      const socketUrl = `${window.location.protocol}//${window.location.hostname}:5000`;
-      socketRef.current = io(socketUrl, { transports: ['websocket', 'polling'] });
+      const socketHost = `http://${window.location.hostname}:5000`;
+      socketRef.current = io(socketHost, { transports: ['websocket'] });
       const socket = socketRef.current;
 
       socket.emit('create-session', { examId: selectedAssessment, pin: sessionPin });
 
-      socket.on('session-created', (data) => {
-        if (data?.assessmentSessionId) {
-          setAssessmentSessionId(data.assessmentSessionId);
-        }
+      socket.on('student-joined', (updatedStudents) => {
+        setStudents(dedup(updatedStudents));
       });
 
-      socket.on('student-joined', (updatedStudents) => {
-        const uniqueMap = {};
-        (updatedStudents || []).forEach(s => {
-          const key = String(s._id || s.id || '');
-          if (key) uniqueMap[key] = { ...s, isOnline: true, lastSeen: Date.now() };
-        });
-        setStudents(Object.values(uniqueMap));
+      socket.on('join-request', (data) => {
+        setPendingJoins(prev => [...prev.filter(p => p.studentId !== data.studentId), data]);
       });
 
       socket.on('student-left', (updatedStudents) => {
-        setStudents(prevStudents => {
-          const activeIds = new Set((updatedStudents || []).map(s => String(s._id || s.id || '')));
-          return prevStudents.map(s => {
-            const sId = String(s._id || s.id || '');
-            return {
-              ...s,
-              isOnline: activeIds.has(sId)
-            };
-          });
+        setStudents(dedup(updatedStudents));
+      });
+
+      socket.on('student-anomaly', ({ studentId, alert }) => {
+        setStudents(curr => {
+          const student = curr.find(s => s._id === studentId || s.id === studentId);
+          setLiveAlerts(prev => [{ ...alert, student: student || { name: 'Unknown' } }, ...prev]);
+          return curr;
         });
       });
 
       socket.on('live_score', (data) => {
-        const sId = String(data.studentId);
-        const newRisk = (data.riskLevel || 'low').toUpperCase();
-        const prevRisk = prevRiskMapRef.current[sId] || 'LOW';
-
-        // Check for meaningful risk escalation
-        const riskRank = { LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
-        if (riskRank[newRisk] > riskRank[prevRisk]) {
-          const notification = {
-            id: Date.now(),
-            studentId: sId,
-            studentName: data.studentName || 'Candidate',
-            fromRisk: prevRisk,
-            toRisk: newRisk,
-            trustScore: Math.round(data.trustScore ?? 100),
-            timestamp: new Date().toLocaleTimeString()
-          };
-          setRiskNotifications(prev => [notification, ...prev].slice(0, 5));
-        }
-
-        prevRiskMapRef.current[sId] = newRisk;
-
-        setLiveScores(prev => ({
-          ...prev,
-          [sId]: {
-            ...data,
-            lastSeen: Date.now()
-          }
-        }));
+        setLiveScores(prev => ({ ...prev, [data.studentId]: data }));
       });
 
-      return () => {
-        socket.disconnect();
-      };
+      return () => socket.disconnect();
     }
   }, [sessionPin, selectedAssessment]);
 
+  const dedup = (arr) => {
+    const seen = new Set();
+    return arr.filter(s => { const id = s._id || s.id; if (seen.has(id)) return false; seen.add(id); return true; });
+  };
+
   const handleCreateSession = () => {
     if (!selectedAssessment) return;
-    const chosen = assessments.find(a => a._id === selectedAssessment);
-    setSelectedAssessmentData(chosen);
     const pin = Math.floor(100000 + Math.random() * 900000).toString();
     setSessionPin(pin);
-    setSessionState('WAITING');
+    setLiveScores({}); setLiveAlerts([]); setStudents([]); setPendingJoins([]);
+    setSessionActive(false);
   };
 
   const handleStartExam = () => {
     if (socketRef.current) {
+      setLiveScores({}); setLiveAlerts([]);
       socketRef.current.emit('start-exam', { pin: sessionPin });
-      setSessionState('ACTIVE');
+      setSessionActive(true);
     }
   };
 
-  const handleEndSession = () => {
-    if (socketRef.current && sessionPin) {
-      socketRef.current.emit('end-session', { pin: sessionPin });
-      socketRef.current.disconnect();
+  const handleApproveJoin = (studentId) => {
+    if (socketRef.current) {
+      socketRef.current.emit('approve-join', { pin: sessionPin, studentId });
+      setPendingJoins(prev => prev.filter(p => p.studentId !== studentId));
     }
-    setSessionState('ENDED');
-    sessionStorage.removeItem('activeProctorPin');
-    sessionStorage.removeItem('activeProctorAssessment');
-    sessionStorage.removeItem('activeProctorState');
   };
 
-  const handleResetProctorRoom = () => {
-    handleEndSession();
-    setSessionPin(null);
-    setAssessmentSessionId(null);
-    setSessionState('WAITING');
-    setStudents([]);
-    setLiveScores({});
-    setSelectedAssessment('');
-    setElapsedSeconds(0);
-  };
-
-  const formatElapsed = (sec) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const getLiveScoreFor = (student) => {
-    if (!student) return null;
-    const idStr = String(student._id || student.id || '');
-    return liveScores[idStr] || null;
-  };
-
-  // Summary Metrics
-  const onlineCount = students.filter(s => s.isOnline !== false).length;
-  const scoresList = Object.values(liveScores).map(s => s.trustScore).filter(val => typeof val === 'number');
-  const avgTrustScore = scoresList.length > 0 ? Math.round(scoresList.reduce((a, b) => a + b, 0) / scoresList.length) : null;
-  const highRiskCount = Object.values(liveScores).filter(s => (s.riskLevel || '').toLowerCase() === 'high' || (s.riskLevel || '').toLowerCase() === 'critical').length;
-  const totalTabSwitches = Object.values(liveScores).reduce((acc, s) => acc + (s.tabBlurCount || 0), 0);
-  const totalPastes = Object.values(liveScores).reduce((acc, s) => acc + (s.pasteCount || 0), 0);
-
-  const getRiskBadge = (riskLevel) => {
-    const lvl = (riskLevel || 'low').toLowerCase();
-    if (lvl === 'critical') {
-      return <span className="px-2.5 py-1 rounded-full text-xs font-black bg-rose-950/80 text-rose-300 border border-rose-600 animate-pulse">CRITICAL</span>;
+  const handleDenyJoin = (studentId) => {
+    if (socketRef.current) {
+      socketRef.current.emit('deny-join', { pin: sessionPin, studentId });
+      setPendingJoins(prev => prev.filter(p => p.studentId !== studentId));
     }
-    if (lvl === 'high') {
-      return <span className="px-2.5 py-1 rounded-full text-xs font-black bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800">HIGH</span>;
-    }
-    if (lvl === 'medium') {
-      return <span className="px-2.5 py-1 rounded-full text-xs font-black bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">MEDIUM</span>;
-    }
-    return <span className="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">LOW</span>;
   };
 
-  const getFormattedActivityTime = (lastSeen) => {
-    if (!lastSeen) return 'Waiting';
-    const diff = Math.floor((Date.now() - lastSeen) / 1000);
-    if (diff < 5) return 'Just now';
-    if (diff < 60) return `${diff} sec ago`;
-    return `${Math.floor(diff / 60)} min ago`;
+  const handleRetrain = async (studentId) => {
+    try {
+      const res = await axios.post(`/api/behavior/retrain/${studentId}`, {}, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      alert(`Retrain: ${res.data.reason || 'Model retrained successfully!'}`);
+    } catch (err) {
+      alert(`Retrain Error: ${err.response?.data?.message || err.message}`);
+    }
   };
 
+  const getLiveScoreFor = (student) => liveScores[student._id] || liveScores[student.id] || null;
+  const getAlertCount = (studentId) =>
+    liveAlerts.filter(a => a.student?._id === studentId || a.student?.id === studentId || a.student === studentId).length;
+
+  // ─── Active Session View ────────────────────────────────────────────────
   if (sessionPin) {
+    const alertsTotal = liveAlerts.length;
+    const highRiskCount = students.filter(s => {
+      const live = getLiveScoreFor(s);
+      return live?.riskLevel === 'high';
+    }).length;
+
     return (
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
-        {/* Header Control Room Bar */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 text-white p-6 rounded-2xl shadow-xl border-b-4 border-brand-500 gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <Shield className="w-8 h-8 text-brand-400" />
-              <div>
-                <h1 className="text-2xl font-black tracking-tight">{selectedAssessmentData?.title || 'Coding Assessment'}</h1>
-                <p className="text-slate-400 text-xs mt-0.5">Academic Proctoring Control Room • Continuous Behavioural Biometrics</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex flex-wrap items-center gap-4 self-end md:self-auto">
-            {/* Status Indicator */}
-            {sessionState === 'WAITING' && (
-              <div className="flex items-center gap-2 px-3.5 py-1.5 bg-amber-950/80 border border-amber-500/50 rounded-xl text-amber-400 text-xs font-bold">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-                <span>WAITING ROOM</span>
-              </div>
-            )}
-            {sessionState === 'ACTIVE' && (
-              <div className="flex items-center gap-2 px-3.5 py-1.5 bg-emerald-950/80 border border-emerald-500/50 rounded-xl text-emerald-400 text-xs font-bold animate-pulse">
-                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                <span>LIVE ASSESSMENT ({formatElapsed(elapsedSeconds)})</span>
-              </div>
-            )}
-            {sessionState === 'ENDED' && (
-              <div className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 text-xs font-bold">
-                <StopCircle className="w-4 h-4 text-slate-400" />
-                <span>ASSESSMENT ENDED</span>
-              </div>
-            )}
-
-            {/* Exit / Return to Selection Screen Button */}
-            <button
-              onClick={handleResetProctorRoom}
-              className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs rounded-xl border border-slate-700 transition-all flex items-center gap-1.5"
-              title="Exit this room and select another assessment"
-            >
-              <X className="w-3.5 h-3.5 text-rose-400" />
-              <span>Exit / New Session</span>
-            </button>
-
-            {/* Session Actions */}
-            {sessionState === 'WAITING' && (
-              <button
-                onClick={handleStartExam}
-                disabled={students.length === 0}
-                className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm rounded-xl shadow-lg disabled:opacity-50 transition-all flex items-center gap-2"
-              >
-                <Zap className="w-4 h-4" />
-                <span>Start Assessment</span>
-              </button>
-            )}
-
-            {sessionState === 'ACTIVE' && (
-              <button
-                onClick={handleEndSession}
-                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm rounded-xl shadow-lg transition-all flex items-center gap-2"
-              >
-                <StopCircle className="w-4 h-4" />
-                <span>End Session</span>
-              </button>
-            )}
-
-            {sessionState === 'ENDED' && (
-              <button
-                onClick={handleResetProctorRoom}
-                className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm rounded-xl shadow-lg transition-all flex items-center gap-2"
-              >
-                <Zap className="w-4 h-4" />
-                <span>Start New Session</span>
-              </button>
-            )}
-
-            <div className="text-right border-l border-slate-700 pl-4">
-              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-0.5">Session PIN</p>
-              <div className="bg-slate-800 px-4 py-1 rounded-lg border border-slate-700 font-mono text-xl tracking-widest font-bold text-brand-400">
-                {sessionPin}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Risk Transition Banner Notifications */}
-        {riskNotifications.length > 0 && (
-          <div className="space-y-2">
-            {riskNotifications.map(n => (
-              <div key={n.id} className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center gap-3">
-                  <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-bold text-rose-900 dark:text-rose-200">
-                      Behavioural Risk Escalated: <span className="underline">{n.studentName}</span>
-                    </p>
-                    <p className="text-xs text-rose-700 dark:text-rose-300 mt-0.5">
-                      Risk level moved from <span className="font-bold">{n.fromRisk}</span> &rarr; <span className="font-extrabold underline">{n.toRisk}</span> (Trust Score: {n.trustScore}%)
-                    </p>
-                  </div>
+      <Layout>
+        <div className="space-y-5">
+          {/* Control Bar */}
+          <div className="lms-card p-5">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: '#eef2ff' }}>
+                  <Shield size={20} className="text-brand-600" />
                 </div>
-                <button
-                  onClick={() => setRiskNotifications(prev => prev.filter(item => item.id !== n.id))}
-                  className="text-rose-400 hover:text-rose-600 p-1"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <div>
+                  <h1 className="text-lg font-black text-slate-900">Proctor Control Room</h1>
+                  <p className="text-xs text-slate-500">Live behavioral biometrics monitoring</p>
+                </div>
               </div>
-            ))}
-          </div>
-        )}
 
-        {/* Session Summary KPI Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <p className="text-[10px] font-bold uppercase text-slate-400">Total Candidates</p>
-            <h3 className="text-xl font-black text-slate-800 dark:text-white mt-1">{students.length}</h3>
-          </div>
+              <div className="flex items-center gap-4 flex-wrap">
+                {/* KPI chips */}
+                <div className="flex items-center gap-2">
+                  <div className="px-3 py-1.5 rounded-xl text-sm font-bold text-slate-700" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <span className="text-slate-500 text-xs">Students:</span> <span className="text-brand-700">{students.length}</span>
+                  </div>
+                  {highRiskCount > 0 && (
+                    <div className="px-3 py-1.5 rounded-xl text-sm font-bold" style={{ background: '#fff1f2', border: '1px solid #fecdd3', color: '#e11d48' }}>
+                      <AlertTriangle size={13} className="inline mr-1" />{highRiskCount} High Risk
+                    </div>
+                  )}
+                  {alertsTotal > 0 && (
+                    <div className="px-3 py-1.5 rounded-xl text-sm font-bold" style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#d97706' }}>
+                      {alertsTotal} Alerts
+                    </div>
+                  )}
+                </div>
 
-          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <p className="text-[10px] font-bold uppercase text-slate-400">Online Candidates</p>
-            <h3 className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{onlineCount}</h3>
-          </div>
+                {/* PIN */}
+                <div className="text-center">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Session PIN</p>
+                  <div className="pin-display py-1.5 px-4 text-2xl mt-0.5">{sessionPin}</div>
+                </div>
 
-          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <p className="text-[10px] font-bold uppercase text-slate-400">Avg Trust Score</p>
-            <h3 className="text-xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
-              {avgTrustScore !== null ? `${avgTrustScore}%` : 'N/A'}
-            </h3>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <p className="text-[10px] font-bold uppercase text-slate-400">High Risk</p>
-            <h3 className="text-xl font-black text-rose-600 dark:text-rose-400 mt-1">{highRiskCount}</h3>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <p className="text-[10px] font-bold uppercase text-slate-400">Total Tab Switches</p>
-            <h3 className="text-xl font-black text-amber-600 dark:text-amber-400 mt-1">{totalTabSwitches}</h3>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <p className="text-[10px] font-bold uppercase text-slate-400">Total Paste Events</p>
-            <h3 className="text-xl font-black text-purple-600 dark:text-purple-400 mt-1">{totalPastes}</h3>
-          </div>
-        </div>
-
-        {/* Candidate Proctoring Table */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md overflow-hidden">
-          <div className="p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex justify-between items-center">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-brand-500" />
-                <span>Candidate Proctoring Matrix</span>
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">Live candidate telemetry synchronized per assessment session</p>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-100/70 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
-                  <th className="p-4 pl-6">Candidate</th>
-                  <th className="p-4 min-w-[180px]">Trust Score</th>
-                  <th className="p-4">Risk Level</th>
-                  <th className="p-4 text-center">Tab Switches</th>
-                  <th className="p-4 text-center">Pastes</th>
-                  <th className="p-4 text-center">Last Activity</th>
-                  <th className="p-4 text-center">Connection</th>
-                  <th className="p-4 pr-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-sm">
-                {students.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-16 text-center text-slate-400 italic">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <Users className="w-8 h-8 text-brand-500 opacity-40 animate-pulse" />
-                        <p className="text-base font-semibold">Waiting for candidates to join room with PIN {sessionPin}...</p>
-                      </div>
-                    </td>
-                  </tr>
+                {/* Start/Active */}
+                {!sessionActive ? (
+                  <button
+                    onClick={handleStartExam}
+                    disabled={students.length === 0}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-white disabled:opacity-40 transition-all hover:opacity-90 active:scale-[0.98]"
+                    style={{ background: '#4f46e5', boxShadow: '0 4px 12px rgba(79,70,229,0.3)' }}
+                  >
+                    <Zap size={16} />
+                    Start Exam
+                  </button>
                 ) : (
-                  students.map((student, i) => {
-                    const studentId = String(student._id || student.id || '');
-                    const live = getLiveScoreFor(student);
-                    const trustScore = live?.trustScore ?? live?.smoothedScore ?? null;
-                    const formattedScore = trustScore !== null ? Math.round(trustScore) : null;
-                    const isDegraded = live?.degraded || live?.mlState === 'degraded';
-                    const isOnline = student.isOnline !== false;
-
-                    return (
-                      <tr key={i} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                        {/* Student Info */}
-                        <td className="p-4 pl-6">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-900/60 text-brand-700 dark:text-brand-300 font-extrabold text-sm flex items-center justify-center border border-brand-200 dark:border-brand-800">
-                              {student.name?.slice(0, 2).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="font-bold text-slate-900 dark:text-white text-sm leading-tight">{student.name}</p>
-                              <p className="text-xs text-slate-500">{student.email}</p>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Live Trust Score */}
-                        <td className="p-4">
-                          {isDegraded ? (
-                            <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                              ML Service Degraded
-                            </span>
-                          ) : formattedScore !== null ? (
-                            <div className="space-y-1">
-                              <div className="flex justify-between items-center text-xs font-mono">
-                                <span className="text-slate-500">Trust:</span>
-                                <span className={`font-black ${formattedScore >= 70 ? 'text-emerald-600 dark:text-emerald-400' : formattedScore >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                                  {formattedScore}%
-                                </span>
-                              </div>
-                              <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-                                <div 
-                                  className={`h-full transition-all duration-500 ${
-                                    formattedScore >= 70 ? 'bg-emerald-500' : formattedScore >= 40 ? 'bg-amber-500' : 'bg-rose-500'
-                                  }`}
-                                  style={{ width: `${formattedScore}%` }}
-                                />
-                              </div>
-                            </div>
-                          ) : sessionState === 'ACTIVE' ? (
-                            <span className="text-xs text-slate-400 italic">Sampling telemetry...</span>
-                          ) : (
-                            <span className="text-xs text-slate-400">Waiting for start</span>
-                          )}
-                        </td>
-
-                        {/* Risk Level */}
-                        <td className="p-4">
-                          {getRiskBadge(live?.riskLevel)}
-                        </td>
-
-                        {/* Tab Switches */}
-                        <td className="p-4 text-center">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
-                            (live?.tabBlurCount || 0) > 0 
-                              ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800' 
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
-                          }`}>
-                            {live?.tabBlurCount || 0}
-                          </span>
-                        </td>
-
-                        {/* Pastes */}
-                        <td className="p-4 text-center">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
-                            (live?.pasteCount || 0) > 0 
-                              ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800' 
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
-                          }`}>
-                            {live?.pasteCount || 0}
-                          </span>
-                        </td>
-
-                        {/* Last Activity */}
-                        <td className="p-4 text-center text-xs text-slate-500 font-medium">
-                          {getFormattedActivityTime(live?.lastSeen || student.lastSeen)}
-                        </td>
-
-                        {/* Connection Status */}
-                        <td className="p-4 text-center">
-                          {isOnline ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                              Online
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700">
-                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                              Offline
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Actions */}
-                        <td className="p-4 pr-6 text-right">
-                          <button
-                            onClick={() => setSelectedStudentForModal({ student, live })}
-                            className="px-3 py-1.5 bg-brand-50 dark:bg-brand-950/40 hover:bg-brand-100 text-brand-600 dark:text-brand-300 text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1 border border-brand-200 dark:border-brand-800"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>View Details</span>
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm text-green-700"
+                    style={{ background: '#f0fdf4', border: '1.5px solid #86efac' }}>
+                    <span className="dot-pulse w-2 h-2 rounded-full bg-green-500 inline-block" />
+                    LIVE
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Candidate Detail Modal / Side Panel */}
-        {selectedStudentForModal && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-6 animate-in fade-in zoom-in-95">
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-brand-100 dark:bg-brand-900/60 text-brand-700 dark:text-brand-300 font-extrabold text-base flex items-center justify-center border border-brand-200 dark:border-brand-800">
-                    {selectedStudentForModal.student.name?.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                      {selectedStudentForModal.student.name}
-                    </h3>
-                    <p className="text-xs text-slate-500">{selectedStudentForModal.student.email}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedStudentForModal(null)}
-                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <p className="text-[10px] font-bold uppercase text-slate-400">Trust Score</p>
-                  <p className="text-xl font-black text-brand-600 dark:text-brand-400 mt-1">
-                    {selectedStudentForModal.live?.trustScore !== undefined 
-                      ? `${Math.round(selectedStudentForModal.live.trustScore)}%` 
-                      : 'N/A'}
-                  </p>
-                </div>
-
-                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <p className="text-[10px] font-bold uppercase text-slate-400">Risk Level</p>
-                  <div className="mt-1">
-                    {getRiskBadge(selectedStudentForModal.live?.riskLevel)}
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <p className="text-[10px] font-bold uppercase text-slate-400">Tab Switches</p>
-                  <p className="text-xl font-black text-rose-600 dark:text-rose-400 mt-1">
-                    {selectedStudentForModal.live?.tabBlurCount || 0}
-                  </p>
-                </div>
-
-                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <p className="text-[10px] font-bold uppercase text-slate-400">Paste Events</p>
-                  <p className="text-xl font-black text-amber-600 dark:text-amber-400 mt-1">
-                    {selectedStudentForModal.live?.pasteCount || 0}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-2 border-t border-slate-100 dark:border-slate-800 pt-4 text-xs">
-                <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                  <span className="font-semibold">Connection Status:</span>
-                  <span className="font-bold">{selectedStudentForModal.student.isOnline !== false ? 'Online' : 'Offline'}</span>
-                </div>
-                <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                  <span className="font-semibold">ML Engine Status:</span>
-                  <span className="font-bold">{selectedStudentForModal.live?.degraded ? 'Degraded Fallback' : 'Active Model'}</span>
-                </div>
-                <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                  <span className="font-semibold">Session Isolation ID:</span>
-                  <span className="font-mono">{assessmentSessionId?.slice(-8) || 'N/A'}</span>
-                </div>
-              </div>
-
-              <div className="pt-2 flex justify-between items-center">
-                <button
-                  onClick={() => {
-                    const studentObj = selectedStudentForModal.student;
-                    setReportStudent(studentObj);
-                    setIsReportModalOpen(true);
-                  }}
-                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all"
-                >
-                  View Detailed Report
-                </button>
-                <button
-                  onClick={() => setSelectedStudentForModal(null)}
-                  className="px-4 py-2 bg-slate-900 dark:bg-slate-800 text-white font-bold text-xs rounded-xl hover:bg-slate-800"
-                >
-                  Close Inspection
-                </button>
               </div>
             </div>
           </div>
-        )}
 
-        {/* Behavior Report Modal */}
-        <BehaviorReportModal
-          isOpen={isReportModalOpen}
-          onClose={() => setIsReportModalOpen(false)}
-          assessmentSessionId={assessmentSessionId}
-          studentId={String(reportStudent?._id || reportStudent?.id || '')}
-          studentName={reportStudent?.name}
-        />
-      </div>
+          {/* Pending Join Requests */}
+          {pendingJoins.length > 0 && (
+            <div className="lms-card p-5">
+              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2 mb-3">
+                <Clock size={16} className="text-amber-500" />
+                Pending Join Requests
+                <span className="lms-badge badge-amber">{pendingJoins.length}</span>
+              </h3>
+              <div className="space-y-2">
+                {pendingJoins.map((req, i) => (
+                  <div key={i} className="flex items-center justify-between gap-4 p-3.5 rounded-xl"
+                    style={{ background: '#fffbeb', border: '1.5px solid #fde68a' }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                        style={{ background: '#e0e7ff', color: '#4338ca' }}>
+                        {(req.studentName || 'S').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-slate-900">{req.studentName || 'Unknown Student'}</p>
+                        <p className="text-xs text-slate-500">{req.studentEmail || ''}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleDenyJoin(req.studentId)}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
+                        style={{ border: '1px solid #fecdd3' }}>
+                        <XCircle size={13} /> Deny
+                      </button>
+                      <button
+                        onClick={() => handleApproveJoin(req.studentId)}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90"
+                        style={{ background: '#4f46e5' }}>
+                        <CheckCircle2 size={13} /> Approve
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Student Monitoring Table */}
+          <div className="lms-card overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+              <UserCheck size={17} className="text-brand-600" />
+              <h2 className="font-bold text-slate-900">Connected Candidates ({students.length})</h2>
+              <p className="text-xs text-slate-500 ml-2">Behavioral telemetry — 5-second sampling window</p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="lms-table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Model</th>
+                    <th style={{ minWidth: 160 }}>Trust Score</th>
+                    <th>Risk</th>
+                    <th>Behavioral Metrics</th>
+                    <th className="text-center">Alerts</th>
+                    <th className="text-center">Status</th>
+                    <th className="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {students.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-16 text-center text-slate-400">
+                        <div className="flex flex-col items-center gap-2">
+                          <RefreshCw size={28} className="text-slate-300" style={{ animation: 'spin 1.5s linear infinite' }} />
+                          <p className="font-semibold text-sm">Waiting for students to join with PIN {sessionPin}...</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : students.map((student, i) => {
+                    const studentId = student._id || student.id;
+                    const live = getLiveScoreFor(student);
+                    const alertCount = getAlertCount(studentId);
+                    return (
+                      <StudentRow
+                        key={i}
+                        student={student}
+                        live={live}
+                        alertCount={alertCount}
+                        sessionActive={sessionActive}
+                        onInspect={setInspectedStudent}
+                        onRetrain={handleRetrain}
+                      />
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Recent Alerts Feed */}
+          {liveAlerts.length > 0 && (
+            <div className="lms-card p-5">
+              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2 mb-3">
+                <AlertTriangle size={16} className="text-rose-500" />
+                Recent Anomaly Alerts
+                <span className="lms-badge badge-red ml-1">{liveAlerts.length}</span>
+              </h3>
+              <div className="space-y-2 max-h-52 overflow-y-auto">
+                {liveAlerts.slice(0, 20).map((alert, i) => (
+                  <div key={i} className="flex items-start justify-between gap-3 p-3 rounded-xl text-xs"
+                    style={{ background: '#fff1f2', border: '1px solid #fecdd3' }}>
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle size={13} className="text-rose-500 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-slate-800">{alert.student?.name || 'Student'}: </span>
+                        <span className="text-rose-700">{getReason(alert)}</span>
+                      </div>
+                    </div>
+                    <span className="text-slate-400 font-mono whitespace-nowrap">
+                      {new Date(alert.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Inspect Modal */}
+        {inspectedStudent && (
+          <InspectModal
+            student={inspectedStudent}
+            live={getLiveScoreFor(inspectedStudent)}
+            alerts={liveAlerts.filter(a => {
+              const id = inspectedStudent._id || inspectedStudent.id;
+              return a.student?._id === id || a.student?.id === id || a.student === id;
+            })}
+            onClose={() => setInspectedStudent(null)}
+          />
+        )}
+      </Layout>
     );
   }
 
+  // ─── Session Setup View ──────────────────────────────────────────────────
   return (
-    <div className="p-6 max-w-3xl mx-auto mt-10">
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl p-8 text-center space-y-6">
-        <div className="w-16 h-16 bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 rounded-2xl flex items-center justify-center mx-auto transform rotate-3 shadow-md">
-          <Shield className="w-8 h-8" />
-        </div>
-        
+    <Layout>
+      <div className="max-w-2xl mx-auto space-y-6">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white">Create Assessment Session</h1>
-          <p className="text-slate-500 text-sm mt-1">Generate a secure room PIN for students to join proctored coding assessments.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Proctor Monitor</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Create a secure live exam room for students.</p>
         </div>
 
-        <div className="max-w-md mx-auto space-y-4 text-left">
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">Select Course</label>
-            <select
-              value={selectedCourse}
-              onChange={e => setSelectedCourse(e.target.value)}
-              className="w-full border border-slate-300 dark:border-slate-600 rounded-xl p-3 bg-slate-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium"
-            >
-              <option value="">-- Choose a Course --</option>
-              {courses.map(c => <option key={c._id} value={c._id}>{c.title}</option>)}
-            </select>
+        <div className="lms-card p-8 space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: '#eef2ff' }}>
+              <Shield size={26} className="text-brand-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-slate-900">Create Exam Room</h2>
+              <p className="text-sm text-slate-500 mt-0.5">Students join with a PIN and password, and you must approve each request.</p>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">Select Coding Assessment</label>
-            <select
-              value={selectedAssessment}
-              onChange={e => setSelectedAssessment(e.target.value)}
-              disabled={!selectedCourse || assessments.length === 0}
-              className="w-full border border-slate-300 dark:border-slate-600 rounded-xl p-3 bg-slate-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium disabled:opacity-50"
+          <div className="space-y-4">
+            <div>
+              <label className="lms-label">Select Course</label>
+              <select
+                value={selectedCourse}
+                onChange={e => setSelectedCourse(e.target.value)}
+                className="lms-input"
+              >
+                <option value="">— Choose a course —</option>
+                {courses.map(c => <option key={c._id} value={c._id}>{c.title}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="lms-label">Select Coding Assessment</label>
+              <select
+                value={selectedAssessment}
+                onChange={e => setSelectedAssessment(e.target.value)}
+                disabled={!selectedCourse || assessments.length === 0}
+                className="lms-input disabled:opacity-50"
+              >
+                <option value="">— Choose an assessment —</option>
+                {assessments.map(a => <option key={a._id} value={a._id}>{a.title}</option>)}
+              </select>
+              {selectedCourse && assessments.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1.5 flex items-center gap-1">
+                  <AlertTriangle size={12} /> No coding assignments in this course yet.
+                </p>
+              )}
+            </div>
+
+            <button
+              onClick={handleCreateSession}
+              disabled={!selectedAssessment}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
+              style={{ background: 'linear-gradient(135deg, #4f46e5, #6366f1)', boxShadow: '0 4px 16px rgba(79,70,229,0.3)' }}
             >
-              <option value="">-- Choose an Assessment --</option>
-              {assessments.map(a => <option key={a._id} value={a._id}>{a.type}: {a.title}</option>)}
-            </select>
+              <Zap size={18} />
+              Generate Session PIN
+            </button>
           </div>
 
-          <button
-            onClick={handleCreateSession}
-            disabled={!selectedAssessment}
-            className="w-full py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm rounded-xl mt-4 shadow-lg shadow-brand-500/30 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-          >
-            <Zap className="w-4 h-4" />
-            <span>Generate Session PIN</span>
-          </button>
+          {/* Info points */}
+          <div className="space-y-2 pt-4 border-t border-slate-100">
+            {[
+              'Students must enter both the PIN and a session password to join',
+              'Each join request requires your explicit approval',
+              'Behavioral biometrics are monitored in real-time during the session',
+            ].map((point, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs text-slate-500">
+                <CheckCircle2 size={14} className="text-brand-500 flex-shrink-0" />
+                {point}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
+    </Layout>
   );
 }

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Universal Behavioral Biometrics API — External Client Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Load the Universal Biometrics SDK directly from our ML API Service -->
+  <script src="/sdk.js"></script>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: rgba(18, 26, 43, 0.85);
+      --border: rgba(255, 255, 255, 0.08);
+      --primary: #00f2fe;
+      --secondary: #6366f1;
+      --paper: #f8fafc;
+      --dim: #94a3b8;
+      --good: #10b981;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(at 10% 10%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+        radial-gradient(at 90% 90%, rgba(0, 242, 254, 0.1) 0px, transparent 50%);
+      background-attachment: fixed;
+      color: var(--paper);
+      font-family: var(--sans);
+      min-height: 100vh;
+      padding: 32px 20px;
+    }
+
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 32px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-badge {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--secondary), #4338ca);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 20px;
+      box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .tagline {
+      font-size: 13px;
+      color: var(--dim);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    @media (max-width: 860px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      backdrop-filter: blur(12px);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--primary);
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--dim);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    input, textarea {
+      width: 100%;
+      background: rgba(10, 15, 29, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(0, 242, 254, 0.2);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      font-family: var(--sans);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--secondary), #4338ca);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+    }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    .btn-accent {
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+      color: #fff;
+    }
+    .btn-accent:hover { opacity: 0.9; }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171;
+    }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.3); }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+    }
+
+    .status-collecting { color: var(--warn); border-color: rgba(245, 158, 11, 0.4); }
+    .status-provisional { color: #38bdf8; border-color: rgba(56, 189, 248, 0.4); }
+    .status-full { color: var(--good); border-color: rgba(16, 185, 129, 0.4); }
+
+    /* Live Proctored Workspace */
+    .proctor-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .stat-box {
+      background: rgba(10, 15, 29, 0.6);
+      border: 1px solid var(--border);
+      padding: 12px;
+      border-radius: 10px;
+      text-align: center;
+    }
+
+    .stat-val {
+      font-size: 20px;
+      font-weight: 800;
+      font-family: var(--mono);
+      color: #fff;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--dim);
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    .live-feed {
+      height: 140px;
+      overflow-y: auto;
+      background: rgba(10, 15, 29, 0.9);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      font-family: var(--mono);
+      font-size: 12px;
+      margin-top: 14px;
+    }
+
+    .feed-entry {
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .feed-violation { color: var(--bad); font-weight: bold; }
+    .feed-score { color: #38bdf8; }
+
+    /* Code sample block */
+    pre {
+      background: #060911;
+      border: 1px solid var(--border);
+      padding: 16px;
+      border-radius: 12px;
+      font-family: var(--mono);
+      font-size: 13px;
+      color: #cbd5e1;
+      overflow-x: auto;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="logo-badge">🛡️</div>
+        <div>
+          <h1>Universal Behavioral Biometrics API</h1>
+          <p class="tagline">Interactive Client Demo: Embeddable BaaS for Any Web Application</p>
+        </div>
+      </div>
+      <div>
+        <span id="client-status-pill" class="status-pill status-collecting">SDK Loaded</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- Tenant & User Configuration -->
+      <div class="card">
+        <h2 class="card-title">1. API Client Configuration</h2>
+        <div class="form-group">
+          <label>API Key (Tenant Token)</label>
+          <input type="text" id="cfg-api-key" value="bio_live_default_lms_key" />
+          <p style="font-size: 11px; color: var(--dim); margin-top: 4px;">
+            Supports <code>bio_live_default_lms_key</code> or custom <code>bio_live_&lt;tenant&gt;</code>.
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label>Student / Candidate ID</label>
+          <input type="text" id="cfg-user-id" value="vijay" />
+        </div>
+
+        <div class="btn-row">
+          <button class="btn-accent" id="btn-check-status">Check Status</button>
+          <button class="btn-primary" id="btn-open-modal">✨ Calibrate Biometrics (Drop-in Modal)</button>
+        </div>
+
+        <div style="margin-top: 20px; padding: 14px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; font-size: 13px;">
+          <div><strong>State:</strong> <span id="disp-state" class="status-pill">Unknown</span></div>
+          <div style="margin-top: 6px;"><strong>Samples Banked:</strong> <span id="disp-samples" style="font-family: var(--mono);">--</span></div>
+          <div style="margin-top: 6px;"><strong>Provisional Threshold:</strong> 10 samples | <strong>Full Model:</strong> 20 samples</div>
+        </div>
+      </div>
+
+      <!-- Live Proctoring Simulation -->
+      <div class="card">
+        <h2 class="card-title">2. Real-Time Assessment Proctoring</h2>
+        <p style="font-size: 12px; color: var(--dim); margin-bottom: 14px;">
+          Starts continuous background proctoring. Keystroke rhythms are verified in 5-second windows. Tries to switch tabs or copy/paste code will be flagged immediately.
+        </p>
+
+        <div class="proctor-stats">
+          <div class="stat-box">
+            <div class="stat-val" id="disp-trust-score">--</div>
+            <div class="stat-label">Trust Score</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="disp-risk-level" style="color: var(--good);">NORMAL</div>
+            <div class="stat-label">Risk Level</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="disp-violations" style="color: var(--warn);">0</div>
+            <div class="stat-label">Violations</div>
+          </div>
+        </div>
+
+        <div class="btn-row" style="margin-bottom: 14px;">
+          <button class="btn-primary" id="btn-start-exam">▶ Start Proctoring Session</button>
+          <button class="btn-danger" id="btn-end-exam" disabled>■ End Session</button>
+        </div>
+
+        <div class="form-group">
+          <label>Exam Typing Scratchpad (Type code or answers here)</label>
+          <textarea id="exam-scratchpad" rows="4" placeholder="Start session above, then type naturally here. Try pasting text or switching tabs to test violation detection..." disabled></textarea>
+        </div>
+
+        <div class="live-feed" id="proctor-feed">
+          <div class="feed-entry" style="color: var(--dim);">Proctor event stream will appear here...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Code Snippet for 3rd-Party Integration -->
+    <div class="card">
+      <h2 class="card-title">3. How Any Web App Integrates This in 15 Lines of Code</h2>
+      <pre><code>&lt;!-- 1. Include the SDK snippet in your HTML &lt;head&gt; --&gt;
+&lt;script src="http://localhost:8000/sdk.js"&gt;&lt;/script&gt;
+
+&lt;script&gt;
+  // 2. Initialize BioAuth with your tenant API key and candidate ID
+  const bio = new BioAuth({
+    apiKey: 'bio_live_your_tenant_key',
+    userId: 'student_12345'
+  });
+
+  // 3. Launch calibration when needed (Zero UI work required)
+  bio.openEnrollmentModal({
+    targetSamples: 20,
+    onComplete: (res) => console.log('Biometric model calibrated & ready!', res)
+  });
+
+  // 4. Start real-time proctoring during assessments
+  bio.startSession({
+    examId: 'cs101_midterm',
+    onScore: (score) => console.log('Live Trust Score:', score.trust_score),
+    onViolation: (v) => alert('Proctor Violation Detected: ' + v.type)
+  });
+&lt;/script&gt;</code></pre>
+    </div>
+  </div>
+
+  <script>
+    let bioClient = null;
+    let violationCount = 0;
+
+    function getBioInstance() {
+      const apiKey = document.getElementById('cfg-api-key').value.trim();
+      const userId = document.getElementById('cfg-user-id').value.trim();
+      return new BioAuth({ apiKey, userId });
+    }
+
+    const feed = document.getElementById('proctor-feed');
+    function logFeed(msg, type = 'info') {
+      const row = document.createElement('div');
+      row.className = `feed-entry ${type === 'violation' ? 'feed-violation' : type === 'score' ? 'feed-score' : ''}`;
+      const time = new Date().toLocaleTimeString();
+      row.innerHTML = `<span>[${time}] ${msg}</span>`;
+      feed.prepend(row);
+    }
+
+    async function checkStatus() {
+      bioClient = getBioInstance();
+      const status = await bioClient.getStatus();
+      const dispState = document.getElementById('disp-state');
+      const dispSamples = document.getElementById('disp-samples');
+
+      dispState.textContent = (status.state || 'COLLECTING').toUpperCase();
+      dispState.className = `status-pill status-${status.state || 'collecting'}`;
+      dispSamples.textContent = `${status.samples_collected || 0} samples`;
+    }
+
+    document.getElementById('btn-check-status').onclick = checkStatus;
+
+    document.getElementById('btn-open-modal').onclick = () => {
+      bioClient = getBioInstance();
+      bioClient.openEnrollmentModal({
+        targetSamples: 20,
+        onComplete: (result) => {
+          checkStatus();
+          logFeed(`Calibration completed! State: ${result.state}`, 'score');
+        }
+      });
+    };
+
+    const scratchpad = document.getElementById('exam-scratchpad');
+    const btnStart = document.getElementById('btn-start-exam');
+    const btnEnd = document.getElementById('btn-end-exam');
+    const dispTrust = document.getElementById('disp-trust-score');
+    const dispRisk = document.getElementById('disp-risk-level');
+    const dispViolations = document.getElementById('disp-violations');
+
+    btnStart.onclick = () => {
+      bioClient = getBioInstance();
+      violationCount = 0;
+      dispViolations.textContent = '0';
+      scratchpad.removeAttribute('disabled');
+      scratchpad.value = '';
+      scratchpad.focus();
+      btnStart.disabled = true;
+      btnEnd.disabled = false;
+
+      logFeed('Proctoring session started. Telemetry streaming active...', 'info');
+
+      bioClient.startSession({
+        examId: 'demo_exam_' + Date.now(),
+        intervalMs: 4000,
+        onScore: (data) => {
+          dispTrust.textContent = `${data.trust_score}%`;
+          dispRisk.textContent = data.risk_level.toUpperCase();
+          if (data.risk_level === 'high') {
+            dispRisk.style.color = 'var(--bad)';
+          } else if (data.risk_level === 'medium') {
+            dispRisk.style.color = 'var(--warn)';
+          } else {
+            dispRisk.style.color = 'var(--good)';
+          }
+          logFeed(`Telemetry verified: Trust ${data.trust_score}% (${data.action})`, 'score');
+        },
+        onViolation: (v) => {
+          violationCount++;
+          dispViolations.textContent = violationCount;
+          logFeed(`VIOLATION: ${v.type.toUpperCase()}`, 'violation');
+        }
+      });
+    };
+
+    btnEnd.onclick = () => {
+      if (bioClient) {
+        bioClient.endSession();
+      }
+      scratchpad.disabled = true;
+      btnStart.disabled = false;
+      btnEnd.disabled = true;
+      logFeed('Proctoring session concluded.', 'info');
+    };
+
+    // Auto-check on load
+    window.addEventListener('DOMContentLoaded', checkStatus);
+  </script>
+</body>
+</html>

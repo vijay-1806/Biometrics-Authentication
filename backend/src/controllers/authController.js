@@ -3,7 +3,7 @@ const User = require('../models/User');
 
 // Helper to generate JWT token
 const generateToken = (id, sessionId) => {
-  return jwt.sign({ id, sessionId }, process.env.JWT_SECRET || 'supersecretlmskey12345', {
+  return jwt.sign({ id, ...(sessionId ? { sessionId } : {}) }, process.env.JWT_SECRET || 'supersecretlmskey12345', {
     expiresIn: '30d',
   });
 };
@@ -26,15 +26,12 @@ const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    const sessionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
-
     // Create user
     const user = await User.create({
       name,
       email,
       password,
       role: role || 'student', // Default to student
-      sessionId,
     });
 
     if (user) {
@@ -43,7 +40,7 @@ const registerUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        token: generateToken(user._id, sessionId),
+        token: generateToken(user._id),
       });
     } else {
       res.status(400).json({ message: 'Invalid user data' });
@@ -59,14 +56,20 @@ const registerUser = async (req, res) => {
 // @access  Public
 const loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, username, password } = req.body;
+    const loginIdentifier = (email || username || '').trim();
 
-    if (!email || !password) {
+    if (!loginIdentifier || !password) {
       return res.status(400).json({ message: 'Please enter all fields' });
     }
 
-    // Check for user email (need to explicitly select password since select: false in model)
-    const user = await User.findOne({ email }).select('+password');
+    // Check for user by email OR name (case-insensitive, trimmed)
+    const user = await User.findOne({
+      $or: [
+        { email: { $regex: new RegExp(`^${loginIdentifier}$`, 'i') } },
+        { name: { $regex: new RegExp(`^${loginIdentifier}$`, 'i') } }
+      ]
+    }).select('+password');
 
     if (user && (await user.matchPassword(password))) {
       const sessionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
@@ -80,7 +83,7 @@ const loginUser = async (req, res) => {
         token: generateToken(user._id, sessionId),
       });
     } else {
-      res.status(401).json({ message: 'Invalid email or password' });
+      res.status(401).json({ message: 'Invalid username/email or password' });
     }
   } catch (error) {
     console.error(error);

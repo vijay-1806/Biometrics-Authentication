@@ -6,8 +6,8 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import CourseDetails from './pages/CourseDetails';
 import CodingPractice from './pages/CodingPractice';
-import QuizPage from './pages/QuizPage';
 import Profile from './pages/Profile';
+import MLTraining from './pages/MLTraining';
 import LiveProctorDashboard from './pages/LiveProctorDashboard';
 
 // Route protection wrapper
@@ -16,8 +16,8 @@ const ProtectedRoute = ({ children }) => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen bg-slate-50 dark:bg-slate-950">
-        <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="flex justify-center items-center h-screen bg-slate-50">
+        <div className="lms-spinner" />
       </div>
     );
   }
@@ -29,14 +29,14 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
-// Route redirect helper for login/register pages (redirect to dashboard if already logged in)
+// Route redirect helper for login/register pages
 const PublicRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen bg-slate-50 dark:bg-slate-950">
-        <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="flex justify-center items-center h-screen bg-slate-50">
+        <div className="lms-spinner" />
       </div>
     );
   }
@@ -80,7 +80,7 @@ function App() {
               </ProtectedRoute>
             }
           />
-          
+
           <Route
             path="/admin/behavior"
             element={
@@ -89,7 +89,7 @@ function App() {
               </ProtectedRoute>
             }
           />
-          
+
           <Route
             path="/courses/:id"
             element={
@@ -109,19 +109,19 @@ function App() {
           />
 
           <Route
-            path="/quizzes/:id"
+            path="/profile"
             element={
               <ProtectedRoute>
-                <QuizPage />
+                <Profile />
               </ProtectedRoute>
             }
           />
 
           <Route
-            path="/profile"
+            path="/ml-training"
             element={
               <ProtectedRoute>
-                <Profile />
+                <MLTraining />
               </ProtectedRoute>
             }
           />
