@@ -56,11 +56,13 @@ const registerUser = async (req, res) => {
 // @access  Public
 const loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ message: 'Please enter all fields' });
     }
+
+    email = email.trim().toLowerCase();
 
     // Check for user email (need to explicitly select password since select: false in model)
     const user = await User.findOne({ email }).select('+password');
