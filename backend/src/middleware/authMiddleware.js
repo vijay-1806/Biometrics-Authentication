@@ -16,8 +16,16 @@ const protect = async (req, res, next) => {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecretlmskey12345');
 
-      // Get user from the token
+      // Get user from the token (handles both string and ObjectId _id types seamlessly)
       req.user = await User.findById(decoded.id).select('-password');
+      if (!req.user) {
+        req.user = await User.findOne({
+          $or: [
+            { _id: decoded.id },
+            { _id: String(decoded.id) }
+          ]
+        }).select('-password');
+      }
       
       if (!req.user) {
         return res.status(401).json({ message: 'Not authorized, user not found' });

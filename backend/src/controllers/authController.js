@@ -56,16 +56,20 @@ const registerUser = async (req, res) => {
 // @access  Public
 const loginUser = async (req, res) => {
   try {
-    let { email, password } = req.body;
+    const { email, username, password } = req.body;
+    const loginIdentifier = (email || username || '').trim();
 
-    if (!email || !password) {
+    if (!loginIdentifier || !password) {
       return res.status(400).json({ message: 'Please enter all fields' });
     }
 
-    email = email.trim().toLowerCase();
-
-    // Check for user email (need to explicitly select password since select: false in model)
-    const user = await User.findOne({ email }).select('+password');
+    // Check for user by email OR name (case-insensitive, trimmed)
+    const user = await User.findOne({
+      $or: [
+        { email: { $regex: new RegExp(`^${loginIdentifier}$`, 'i') } },
+        { name: { $regex: new RegExp(`^${loginIdentifier}$`, 'i') } }
+      ]
+    }).select('+password');
 
     if (user && (await user.matchPassword(password))) {
       res.json({
@@ -76,7 +80,7 @@ const loginUser = async (req, res) => {
         token: generateToken(user._id),
       });
     } else {
-      res.status(401).json({ message: 'Invalid email or password' });
+      res.status(401).json({ message: 'Invalid username/email or password' });
     }
   } catch (error) {
     console.error(error);
