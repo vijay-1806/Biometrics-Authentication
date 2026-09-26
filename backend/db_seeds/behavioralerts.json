@@ -1,6 +1,6 @@
 [
   {
-    "_id": "6ab73f9cb7060eb882ba9a72",
+    "_id": "6ab762f80bd68165000ddb82",
     "student": "6ab3f447e9fa5f05ade70262",
     "session": "6a926a0b6a5e367e13191100",
     "exam": "6a926a0b6a5e367e13191100",
@@ -12,47 +12,13 @@
     "reviewed": false,
     "notes": "",
     "severity": "low",
-    "createdAt": "2026-09-26T03:44:28.202Z",
-    "updatedAt": "2026-09-26T03:44:28.202Z",
+    "createdAt": "2026-09-26T06:15:20.840Z",
+    "updatedAt": "2026-09-26T06:15:20.840Z",
     "__v": 0
   },
   {
-    "_id": "6ab73fa0b7060eb882ba9a73",
+    "_id": "6ab762ff0bd68165000ddb83",
     "student": "6ab3f447e9fa5f05ade70262",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "behavioral_anomaly",
-    "score": 36.5,
-    "topDeviatingFeatures": [
-      "Low trust score, single sample — not yet sustained."
-    ],
-    "reviewed": false,
-    "notes": "",
-    "severity": "medium",
-    "createdAt": "2026-09-26T03:44:32.994Z",
-    "updatedAt": "2026-09-26T03:44:32.994Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab73fe7b7060eb882ba9a74",
-    "student": "6ab3f447e9fa5f05ade70262",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T03:45:43.085Z",
-    "updatedAt": "2026-09-26T03:45:43.085Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab74007b7060eb882ba9a7f",
-    "student": "6ab4975852379a75c38844e5",
     "session": "6a926a0b6a5e367e13191100",
     "exam": "6a926a0b6a5e367e13191100",
     "alertType": "behavioral_anomaly",
@@ -63,13 +29,13 @@
     "reviewed": false,
     "notes": "",
     "severity": "medium",
-    "createdAt": "2026-09-26T03:46:15.916Z",
-    "updatedAt": "2026-09-26T03:46:15.916Z",
+    "createdAt": "2026-09-26T06:15:27.354Z",
+    "updatedAt": "2026-09-26T06:15:27.354Z",
     "__v": 0
   },
   {
-    "_id": "6ab7400ab7060eb882ba9a80",
-    "student": "6ab4975852379a75c38844e5",
+    "_id": "6ab7633b0bd68165000ddb84",
+    "student": "6ab3f447e9fa5f05ade70262",
     "session": "6a926a0b6a5e367e13191100",
     "exam": "6a926a0b6a5e367e13191100",
     "alertType": "tab_switch",
@@ -80,46 +46,189 @@
     "reviewed": false,
     "notes": "",
     "severity": "low",
-    "createdAt": "2026-09-26T03:46:18.120Z",
-    "updatedAt": "2026-09-26T03:46:18.120Z",
+    "createdAt": "2026-09-26T06:16:27.700Z",
+    "updatedAt": "2026-09-26T06:16:27.700Z",
     "__v": 0
   },
   {
-    "_id": "6ab7404db7060eb882ba9a81",
-    "student": "6ab4975852379a75c38844e5",
+    "_id": "6ab7672f0bd68165000ddb85",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "tab_switch",
+    "score": null,
+    "topDeviatingFeatures": {
+      "tabBlurCount": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:33:19.859Z",
+    "updatedAt": "2026-09-26T06:33:19.859Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab7673e0bd68165000ddb8e",
+    "student": "6ab3f447e9fa5f05ade70262",
     "session": "6a926a0b6a5e367e13191100",
     "exam": "6a926a0b6a5e367e13191100",
     "alertType": "behavioral_anomaly",
-    "score": 42,
+    "score": 20,
     "topDeviatingFeatures": [
-      "Low trust score, single sample — not yet sustained."
+      "Trust score stayed low across multiple samples."
     ],
     "reviewed": false,
     "notes": "",
+    "severity": "high",
+    "createdAt": "2026-09-26T06:33:34.448Z",
+    "updatedAt": "2026-09-26T06:33:34.448Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab767400bd68165000ddb8f",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "tab_switch",
+    "score": null,
+    "topDeviatingFeatures": {
+      "tabBlurCount": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:33:36.804Z",
+    "updatedAt": "2026-09-26T06:33:36.804Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab767860bd68165000ddb90",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "copy_detected",
+    "score": null,
+    "topDeviatingFeatures": {
+      "copyCount": 1,
+      "totalCopiedChars": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:34:46.752Z",
+    "updatedAt": "2026-09-26T06:34:46.752Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab767870bd68165000ddb91",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "copy_detected",
+    "score": null,
+    "topDeviatingFeatures": {
+      "copyCount": 1,
+      "totalCopiedChars": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:34:47.190Z",
+    "updatedAt": "2026-09-26T06:34:47.190Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab767870bd68165000ddb92",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "copy_detected",
+    "score": null,
+    "topDeviatingFeatures": {
+      "copyCount": 1,
+      "totalCopiedChars": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:34:47.629Z",
+    "updatedAt": "2026-09-26T06:34:47.629Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab767880bd68165000ddb93",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "copy_detected",
+    "score": null,
+    "topDeviatingFeatures": {
+      "copyCount": 1,
+      "totalCopiedChars": 1
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "low",
+    "createdAt": "2026-09-26T06:34:48.136Z",
+    "updatedAt": "2026-09-26T06:34:48.136Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab767890bd68165000ddb94",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "paste_detected",
+    "score": null,
+    "topDeviatingFeatures": {
+      "pasteCount": 1,
+      "totalPastedChars": 40
+    },
+    "reviewed": false,
+    "notes": "",
     "severity": "medium",
-    "createdAt": "2026-09-26T03:47:25.820Z",
-    "updatedAt": "2026-09-26T03:47:25.820Z",
+    "createdAt": "2026-09-26T06:34:49.487Z",
+    "updatedAt": "2026-09-26T06:34:49.487Z",
     "__v": 0
   },
   {
-    "_id": "6ab740dfb7060eb882ba9a82",
-    "student": "6ab4975852379a75c38844e5",
+    "_id": "6ab7678a0bd68165000ddb95",
+    "student": "6ab3f447e9fa5f05ade70262",
     "session": "6a926a0b6a5e367e13191100",
     "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
+    "alertType": "paste_detected",
     "score": null,
     "topDeviatingFeatures": {
-      "tabBlurCount": 1
+      "pasteCount": 1,
+      "totalPastedChars": 40
     },
     "reviewed": false,
     "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T03:49:51.264Z",
-    "updatedAt": "2026-09-26T03:49:51.264Z",
+    "severity": "medium",
+    "createdAt": "2026-09-26T06:34:50.117Z",
+    "updatedAt": "2026-09-26T06:34:50.117Z",
     "__v": 0
   },
   {
-    "_id": "6ab74100b7060eb882ba9a83",
+    "_id": "6ab7678a0bd68165000ddb96",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "session": "6a926a0b6a5e367e13191100",
+    "exam": "6a926a0b6a5e367e13191100",
+    "alertType": "paste_detected",
+    "score": null,
+    "topDeviatingFeatures": {
+      "pasteCount": 1,
+      "totalPastedChars": 40
+    },
+    "reviewed": false,
+    "notes": "",
+    "severity": "medium",
+    "createdAt": "2026-09-26T06:34:50.446Z",
+    "updatedAt": "2026-09-26T06:34:50.446Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab7678d0bd68165000ddb97",
     "student": "6ab3f447e9fa5f05ade70262",
     "session": "6a926a0b6a5e367e13191100",
     "exam": "6a926a0b6a5e367e13191100",
@@ -131,148 +240,29 @@
     "reviewed": false,
     "notes": "",
     "severity": "low",
-    "createdAt": "2026-09-26T03:50:24.981Z",
-    "updatedAt": "2026-09-26T03:50:24.981Z",
+    "createdAt": "2026-09-26T06:34:53.101Z",
+    "updatedAt": "2026-09-26T06:34:53.101Z",
     "__v": 0
   },
   {
-    "_id": "6ab74107b7060eb882ba9a84",
+    "_id": "6ab7678e0bd68165000ddb98",
     "student": "6ab3f447e9fa5f05ade70262",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T03:50:31.929Z",
-    "updatedAt": "2026-09-26T03:50:31.929Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab74119b7060eb882ba9a85",
-    "student": "6ab3f447e9fa5f05ade70262",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T03:50:49.834Z",
-    "updatedAt": "2026-09-26T03:50:49.834Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab7411bb7060eb882ba9a86",
-    "student": "6ab3f447e9fa5f05ade70262",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T03:50:51.583Z",
-    "updatedAt": "2026-09-26T03:50:51.583Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab74177b7060eb882ba9a87",
-    "student": "6ab4975852379a75c38844e5",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T03:52:23.579Z",
-    "updatedAt": "2026-09-26T03:52:23.579Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab74203b7060eb882ba9a88",
-    "student": "6ab4975852379a75c38844e5",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T03:54:43.584Z",
-    "updatedAt": "2026-09-26T03:54:43.584Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab74239b7060eb882ba9a89",
-    "student": "6ab4975852379a75c38844e5",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T03:55:37.971Z",
-    "updatedAt": "2026-09-26T03:55:37.971Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab74265b7060eb882ba9a8a",
-    "student": "6ab4975852379a75c38844e5",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T03:56:21.645Z",
-    "updatedAt": "2026-09-26T03:56:21.645Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab7428eb7060eb882ba9a8b",
-    "student": "6ab4975852379a75c38844e5",
     "session": "6a926a0b6a5e367e13191100",
     "exam": "6a926a0b6a5e367e13191100",
     "alertType": "behavioral_anomaly",
-    "score": 53,
+    "score": 20,
     "topDeviatingFeatures": [
-      "Behavior partially deviates from baseline."
+      "Trust score stayed low across multiple samples."
     ],
     "reviewed": false,
     "notes": "",
-    "severity": "medium",
-    "createdAt": "2026-09-26T03:57:02.803Z",
-    "updatedAt": "2026-09-26T03:57:02.803Z",
+    "severity": "high",
+    "createdAt": "2026-09-26T06:34:54.461Z",
+    "updatedAt": "2026-09-26T06:34:54.461Z",
     "__v": 0
   },
   {
-    "_id": "6ab742b4b7060eb882ba9a8c",
+    "_id": "6ab767be0bd68165000ddb99",
     "student": "6ab3f447e9fa5f05ade70262",
     "session": "6a926a0b6a5e367e13191100",
     "exam": "6a926a0b6a5e367e13191100",
@@ -284,212 +274,8 @@
     "reviewed": false,
     "notes": "",
     "severity": "low",
-    "createdAt": "2026-09-26T03:57:40.374Z",
-    "updatedAt": "2026-09-26T03:57:40.374Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab74329b7060eb882ba9a8d",
-    "student": "6ab3f447e9fa5f05ade70262",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T03:59:37.196Z",
-    "updatedAt": "2026-09-26T03:59:37.196Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab7435eb7060eb882ba9a9e",
-    "student": "6ab4975852379a75c38844e5",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T04:00:30.523Z",
-    "updatedAt": "2026-09-26T04:00:30.523Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab7445eb7060eb882ba9a9f",
-    "student": "6ab4975852379a75c38844e5",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "behavioral_anomaly",
-    "score": 62,
-    "topDeviatingFeatures": [
-      "Behavior partially deviates from baseline."
-    ],
-    "reviewed": false,
-    "notes": "",
-    "severity": "medium",
-    "createdAt": "2026-09-26T04:04:46.494Z",
-    "updatedAt": "2026-09-26T04:04:46.494Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab744cbb7060eb882ba9aa0",
-    "student": "6ab4975852379a75c38844e5",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "behavioral_anomaly",
-    "score": 40,
-    "topDeviatingFeatures": [
-      "Behavior partially deviates from baseline."
-    ],
-    "reviewed": false,
-    "notes": "",
-    "severity": "medium",
-    "createdAt": "2026-09-26T04:06:35.844Z",
-    "updatedAt": "2026-09-26T04:06:35.844Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab744fab7060eb882ba9aa1",
-    "student": "6ab4975852379a75c38844e5",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T04:07:22.231Z",
-    "updatedAt": "2026-09-26T04:07:22.231Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab7456eb7060eb882ba9abc",
-    "student": "6ab4975852379a75c38844e5",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T04:09:18.958Z",
-    "updatedAt": "2026-09-26T04:09:18.958Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab745fab7060eb882ba9abd",
-    "student": "6ab4975852379a75c38844e5",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T04:11:38.540Z",
-    "updatedAt": "2026-09-26T04:11:38.540Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab745fbb7060eb882ba9abe",
-    "student": "6ab4975852379a75c38844e5",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T04:11:39.418Z",
-    "updatedAt": "2026-09-26T04:11:39.418Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab745fdb7060eb882ba9abf",
-    "student": "6ab4975852379a75c38844e5",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T04:11:41.364Z",
-    "updatedAt": "2026-09-26T04:11:41.364Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab748d5b7060eb882ba9ac0",
-    "student": "6ab4975852379a75c38844e5",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T04:23:49.420Z",
-    "updatedAt": "2026-09-26T04:23:49.420Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab748d9b7060eb882ba9ac1",
-    "student": "6ab4975852379a75c38844e5",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T04:23:53.507Z",
-    "updatedAt": "2026-09-26T04:23:53.507Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab748dab7060eb882ba9ac2",
-    "student": "6ab4975852379a75c38844e5",
-    "session": "6a926a0b6a5e367e13191100",
-    "exam": "6a926a0b6a5e367e13191100",
-    "alertType": "tab_switch",
-    "score": null,
-    "topDeviatingFeatures": {
-      "tabBlurCount": 1
-    },
-    "reviewed": false,
-    "notes": "",
-    "severity": "low",
-    "createdAt": "2026-09-26T04:23:54.777Z",
-    "updatedAt": "2026-09-26T04:23:54.777Z",
+    "createdAt": "2026-09-26T06:35:42.865Z",
+    "updatedAt": "2026-09-26T06:35:42.865Z",
     "__v": 0
   }
 ]

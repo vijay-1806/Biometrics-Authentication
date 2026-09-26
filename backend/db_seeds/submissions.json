@@ -12,5 +12,19 @@
     "createdAt": "2026-09-24T04:21:34.241Z",
     "updatedAt": "2026-09-24T04:21:34.241Z",
     "__v": 0
+  },
+  {
+    "_id": "6ab75b0a0bd68165000ddb35",
+    "student": "6ab3f447e9fa5f05ade70262",
+    "assignment": "6a926a0b6a5e367e13191100",
+    "code": "n,m=map(int,input().split())\nprint(n+m)",
+    "language": "python",
+    "status": "pass",
+    "output": "Test Case 1: Input [5 10] => Expected [15], Got [15] - PASSED\n",
+    "testCasesPassed": 1,
+    "testCasesTotal": 1,
+    "createdAt": "2026-09-26T05:41:30.080Z",
+    "updatedAt": "2026-09-26T05:41:30.080Z",
+    "__v": 0
   }
 ]
