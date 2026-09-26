@@ -12,7 +12,8 @@
     "db:export": "npm run db:export --prefix backend",
     "db:import": "npm run db:import --prefix backend",
     "db:seed": "npm run db:seed --prefix backend",
-    "dev": "concurrently \"npm run server\" \"npm run client\""
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "dev:all": "concurrently \"npm run server\" \"npm run client\" \"npm run ml\""
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
