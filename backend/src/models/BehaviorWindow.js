@@ -39,7 +39,9 @@ const behaviorWindowSchema = new mongoose.Schema(
     explicitFlags: {
       tabBlurCount: { type: Number, default: 0 },
       pasteCount: { type: Number, default: 0 },
-      totalPastedChars: { type: Number, default: 0 }
+      totalPastedChars: { type: Number, default: 0 },
+      copyCount: { type: Number, default: 0 },
+      totalCopiedChars: { type: Number, default: 0 }
     },
     deviceInfo: {
       type: mongoose.Schema.Types.Mixed,

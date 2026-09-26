@@ -14,7 +14,7 @@ export default function LiveProctorDashboard() {
   const [students, setStudents] = useState([]);
   const [liveAlerts, setLiveAlerts] = useState([]);
   const [liveScores, setLiveScores] = useState({});
-  const [showAlertDrawer, setShowAlertDrawer] = useState(true);
+  const [inspectedStudent, setInspectedStudent] = useState(null);
 
   const socketRef = useRef(null);
 
@@ -43,17 +43,36 @@ export default function LiveProctorDashboard() {
   // Handle Socket Events
   useEffect(() => {
     if (sessionPin) {
-      socketRef.current = io('http://localhost:5000', { transports: ['websocket'] });
+      const socketHost = typeof window !== 'undefined' ? `http://${window.location.hostname}:5000` : 'http://localhost:5000';
+      socketRef.current = io(socketHost, { transports: ['websocket'] });
       const socket = socketRef.current;
 
       socket.emit('create-session', { examId: selectedAssessment, pin: sessionPin });
 
       socket.on('student-joined', (updatedStudents) => {
-        setStudents(updatedStudents);
+        const unique = [];
+        const seen = new Set();
+        for (const s of updatedStudents) {
+          const id = s._id || s.id;
+          if (id && !seen.has(id)) {
+            seen.add(id);
+            unique.push(s);
+          }
+        }
+        setStudents(unique);
       });
 
       socket.on('student-left', (updatedStudents) => {
-        setStudents(updatedStudents);
+        const unique = [];
+        const seen = new Set();
+        for (const s of updatedStudents) {
+          const id = s._id || s.id;
+          if (id && !seen.has(id)) {
+            seen.add(id);
+            unique.push(s);
+          }
+        }
+        setStudents(unique);
       });
 
       socket.on('student-anomaly', ({ studentId, alert }) => {
@@ -82,10 +101,16 @@ export default function LiveProctorDashboard() {
     if (!selectedAssessment) return;
     const pin = Math.floor(100000 + Math.random() * 900000).toString();
     setSessionPin(pin);
+    setLiveScores({});
+    setLiveAlerts([]);
+    setStudents([]);
+    setSessionActive(false);
   };
 
   const handleStartExam = () => {
     if (socketRef.current) {
+      setLiveScores({});
+      setLiveAlerts([]);
       socketRef.current.emit('start-exam', { pin: sessionPin });
       setSessionActive(true);
     }
@@ -94,6 +119,7 @@ export default function LiveProctorDashboard() {
   const getReason = (alert) => {
     if (alert.alertType === 'behavioral_anomaly') return "Typing rhythm or mouse kinetics deviated from historical baseline.";
     if (alert.alertType === 'paste_detected') return `Student pasted ${alert.topDeviatingFeatures?.totalPastedChars || 'a block of'} characters.`;
+    if (alert.alertType === 'copy_detected') return `Student copied ${alert.topDeviatingFeatures?.totalCopiedChars || ''} characters from exam.`;
     if (alert.alertType === 'device_change') return "Student changed devices or resolution mid-exam.";
     if (alert.alertType === 'tab_switch') return `Student switched away from exam tab (${alert.topDeviatingFeatures?.tabBlurCount || ''}x).`;
     return "Unknown anomaly detected.";
@@ -163,22 +189,12 @@ export default function LiveProctorDashboard() {
 
         {/* Unified SEB Monitoring Table */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md overflow-hidden">
-          <div className="p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex justify-between items-center">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-brand-500" />
-                <span>Connected Candidates ({students.length})</span>
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">Real-time telemetry stream synchronized per 5-second sampling window</p>
-            </div>
-
-            <button
-              onClick={() => setShowAlertDrawer(!showAlertDrawer)}
-              className="px-3.5 py-1.5 text-xs font-bold bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg transition-colors flex items-center gap-2"
-            >
-              <Bell className="w-4 h-4" />
-              <span>{showAlertDrawer ? 'Hide Anomaly Feed' : `Show Anomaly Feed (${liveAlerts.length})`}</span>
-            </button>
+          <div className="p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-brand-500" />
+              <span>Connected Candidates ({students.length})</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">Real-time telemetry stream synchronized per 5-second sampling window</p>
           </div>
 
           <div className="overflow-x-auto">
@@ -191,6 +207,7 @@ export default function LiveProctorDashboard() {
                   <th className="p-4">Risk Level</th>
                   <th className="p-4 text-center">Tab Switches</th>
                   <th className="p-4 text-center">Pastes</th>
+                  <th className="p-4 text-center">Copies</th>
                   <th className="p-4 text-center">Alerts</th>
                   <th className="p-4 text-center">Status</th>
                   <th className="p-4 pr-6 text-right">Actions</th>
@@ -199,7 +216,7 @@ export default function LiveProctorDashboard() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-sm">
                 {students.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-16 text-center text-slate-400 italic">
+                    <td colSpan={10} className="py-16 text-center text-slate-400 italic">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <RefreshCw className="w-8 h-8 animate-spin text-brand-500 opacity-40" />
                         <p className="text-base font-semibold">Waiting for candidates to join room with PIN {sessionPin}...</p>
@@ -211,7 +228,7 @@ export default function LiveProctorDashboard() {
                     const studentId = student._id || student.id;
                     const live = getLiveScoreFor(student);
                     const alertCount = getAlertCountForStudent(studentId);
-                    const trustScore = live?.trustScore ?? live?.smoothedScore ?? null;
+                    const trustScore = live?.trustScore ?? (live?.smoothedScore > 0 ? live.smoothedScore : null);
                     const formattedScore = trustScore !== null ? Math.round(trustScore) : null;
                     const modelState = live?.state || 'ready';
 
@@ -233,8 +250,14 @@ export default function LiveProctorDashboard() {
 
                         {/* Model Baseline */}
                         <td className="p-4">
-                          <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-md border border-slate-200 dark:border-slate-700 capitalize">
-                            {modelState}
+                          <span className={`px-2.5 py-1 text-xs font-semibold rounded-md border capitalize ${
+                            modelState === 'full' 
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                              : modelState === 'provisional'
+                              ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}>
+                            {modelState === 'full' ? 'Full Baseline (20/20)' : modelState === 'provisional' ? 'Provisional' : 'Collecting'}
                           </span>
                         </td>
 
@@ -291,6 +314,17 @@ export default function LiveProctorDashboard() {
                           </span>
                         </td>
 
+                        {/* Copies */}
+                        <td className="p-4 text-center">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
+                            (live?.copyCount || 0) > 0 
+                              ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800' 
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                          }`}>
+                            {live?.copyCount || 0}x
+                          </span>
+                        </td>
+
                         {/* Alerts */}
                         <td className="p-4 text-center">
                           <span className={`px-2.5 py-1 rounded-full text-xs font-black border ${
@@ -331,7 +365,7 @@ export default function LiveProctorDashboard() {
                               <span>Retrain</span>
                             </button>
                             <button
-                              onClick={() => alert(`Reviewing candidate: ${student.name}`)}
+                              onClick={() => setInspectedStudent(student)}
                               className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1"
                             >
                               <Eye className="w-3.5 h-3.5" />
@@ -348,41 +382,93 @@ export default function LiveProctorDashboard() {
           </div>
         </div>
 
-        {/* Collapsible Real-Time Anomaly Log Feed */}
-        {showAlertDrawer && (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md p-6 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
-              <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-rose-500" />
-                <span>Real-Time Anomaly Event Stream</span>
-              </h3>
-              <span className="text-xs text-slate-500 font-mono">{liveAlerts.length} Events Flagged</span>
-            </div>
+        {/* Modal Dialog for Candidate Inspection */}
+        {inspectedStudent && (() => {
+          const studentId = inspectedStudent._id || inspectedStudent.id;
+          const live = getLiveScoreFor(inspectedStudent);
+          const studentAlerts = liveAlerts.filter(a => a.student?._id === studentId || a.student?.id === studentId || a.student === studentId);
+          const trustScore = live?.trustScore ?? live?.smoothedScore ?? null;
 
-            <div className="max-h-60 overflow-y-auto space-y-3 pr-2">
-              {liveAlerts.length === 0 ? (
-                <p className="text-center text-slate-400 text-xs italic py-6">No security anomalies flagged yet for this session.</p>
-              ) : (
-                liveAlerts.map((alert, i) => (
-                  <div key={i} className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-rose-200 dark:border-rose-900/50 flex justify-between items-start gap-4">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 rounded-lg mt-0.5">
-                        <AlertCircle className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-900 dark:text-white text-xs">{alert.student?.name || 'Student Candidate'}</p>
-                        <p className="text-rose-600 dark:text-rose-300 text-xs mt-0.5 font-medium">{getReason(alert)}</p>
-                      </div>
+          return (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex justify-between items-start border-b border-slate-200 dark:border-slate-800 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-brand-100 dark:bg-brand-900/60 text-brand-700 dark:text-brand-300 font-extrabold text-base flex items-center justify-center border border-brand-200 dark:border-brand-800">
+                      {inspectedStudent.name?.slice(0, 2).toUpperCase()}
                     </div>
-                    <span className="text-[10px] font-mono text-slate-400 whitespace-nowrap">
-                      {new Date(alert.createdAt || Date.now()).toLocaleTimeString()}
+                    <div>
+                      <h3 className="font-extrabold text-lg text-slate-900 dark:text-white leading-tight">{inspectedStudent.name}</h3>
+                      <p className="text-xs text-slate-500">{inspectedStudent.email}</p>
+                      <p className="text-[11px] font-mono text-slate-400 mt-0.5">ID: {studentId}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setInspectedStudent(null)}
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <XCircle className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {/* Key Metrics Grid */}
+                <div className="grid grid-cols-2 gap-3 text-center">
+                  <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Trust Score</span>
+                    <span className={`text-xl font-black ${trustScore !== null && trustScore >= 70 ? 'text-emerald-600' : trustScore !== null && trustScore >= 40 ? 'text-amber-600' : 'text-rose-600'}`}>
+                      {trustScore !== null ? `${Math.round(trustScore)} / 100` : 'Sampling...'}
                     </span>
                   </div>
-                ))
-              )}
+
+                  <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Risk Level</span>
+                    <div className="mt-1">{riskBadge(live?.riskLevel)}</div>
+                  </div>
+
+                  <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Tab Switches</span>
+                    <span className="text-lg font-black text-slate-900 dark:text-white">{live?.tabBlurCount || 0}x</span>
+                  </div>
+
+                  <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Pastes & Copies</span>
+                    <span className="text-lg font-black text-slate-900 dark:text-white">
+                      {live?.pasteCount || 0}P / {live?.copyCount || 0}C
+                    </span>
+                  </div>
+                </div>
+
+                {/* Violations Log for this Student */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Candidate Activity ({studentAlerts.length})</h4>
+                  <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+                    {studentAlerts.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic text-center py-4">No anomalies logged for this candidate.</p>
+                    ) : (
+                      studentAlerts.map((alert, idx) => (
+                        <div key={idx} className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 text-xs flex justify-between items-center gap-2">
+                          <span className="text-rose-700 dark:text-rose-300 font-medium">{getReason(alert)}</span>
+                          <span className="text-[10px] font-mono text-slate-400 whitespace-nowrap">
+                            {new Date(alert.createdAt || Date.now()).toLocaleTimeString()}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+                  <button
+                    onClick={() => setInspectedStudent(null)}
+                    className="px-5 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     );
   }

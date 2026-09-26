@@ -86,7 +86,8 @@ const QuizPage = () => {
     if (!sessionPinInput) return;
     setSessionError('');
     
-    socketRef.current = io('http://localhost:5000', { transports: ['websocket'] });
+    const socketHost = typeof window !== 'undefined' ? `http://${window.location.hostname}:5000` : 'http://localhost:5000';
+    socketRef.current = io(socketHost, { transports: ['websocket'] });
     const socket = socketRef.current;
     
     socket.emit('join-session', { pin: sessionPinInput, student: { id: user._id, name: user.name, email: user.email } });
@@ -99,6 +100,7 @@ const QuizPage = () => {
     socket.on('exam-started', () => {
       setInSession(true);
       setWaitingForStart(false);
+      window.dispatchEvent(new Event('exam-session-reset'));
     });
     
     socket.on('join-error', (msg) => {
@@ -368,7 +370,13 @@ const QuizPage = () => {
         {/* Top Header: Quiz Info & Timer */}
         <div className="flex justify-between items-center bg-white dark:bg-slate-900 border p-4 rounded-2xl shadow-sm">
           <div>
-            <h2 className="font-extrabold text-slate-900 dark:text-white">{quiz?.title}</h2>
+            <div className="flex items-center gap-2.5">
+              <h2 className="font-extrabold text-slate-900 dark:text-white">{quiz?.title}</h2>
+              <span className="flex items-center gap-1.5 text-[11px] text-cyan-600 dark:text-cyan-400 font-bold bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800/60 px-2.5 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
+                <span>BioAuth SDK Active</span>
+              </span>
+            </div>
             <p className="text-xs text-slate-400 mt-0.5">{quiz?.description}</p>
           </div>
           

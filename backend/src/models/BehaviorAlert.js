@@ -16,7 +16,7 @@ const behaviorAlertSchema = new mongoose.Schema(
     },
     alertType: {
       type: String,
-      enum: ['behavioral_anomaly', 'paste_detected', 'device_change'],
+      enum: ['behavioral_anomaly', 'paste_detected', 'copy_detected', 'tab_switch', 'device_change'],
       default: 'behavioral_anomaly',
       required: true
     },
@@ -27,6 +27,8 @@ const behaviorAlertSchema = new mongoose.Schema(
     // topDeviatingFeatures shape by alertType:
     //   behavioral_anomaly: [{ feature: string, zscore: number }, ...]
     //   paste_detected:     { pasteCount: number, totalPastedChars: number }
+    //   copy_detected:      { copyCount: number, totalCopiedChars: number }
+    //   tab_switch:         { tabBlurCount: number }
     //   device_change:      { from: {userAgent, screenWidth, screenHeight}, to: {...} }
     topDeviatingFeatures: {
       type: mongoose.Schema.Types.Mixed,

@@ -93,6 +93,12 @@ function AlertCard({ alert, onReview }) {
   } else if (alert.alertType === 'paste_detected') {
     const f = alert.topDeviatingFeatures || {};
     reason = `Student pasted ${f.totalPastedChars || 'a large block of'} characters directly into the exam.`;
+  } else if (alert.alertType === 'copy_detected') {
+    const f = alert.topDeviatingFeatures || {};
+    reason = `Student copied ${f.totalCopiedChars || ''} characters from the exam.`;
+  } else if (alert.alertType === 'tab_switch') {
+    const f = alert.topDeviatingFeatures || {};
+    reason = `Student switched away from the exam tab or application window (${f.tabBlurCount || 1}x).`;
   } else if (alert.alertType === 'device_change') {
     reason = "Student changed devices or browsers in the middle of the exam.";
   }

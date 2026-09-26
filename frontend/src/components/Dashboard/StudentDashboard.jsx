@@ -10,8 +10,12 @@ import {
   ChevronRight, 
   CheckCircle, 
   ArrowRight,
-  TrendingUp
+  TrendingUp,
+  Fingerprint,
+  Sparkles,
+  ShieldCheck
 } from 'lucide-react';
+import { fetchBiometricStatus, openBiometricCalibrationModal } from '../../services/bioAuth';
 import {
   AreaChart,
   Area,
@@ -27,6 +31,7 @@ const StudentDashboard = () => {
   const [courses, setCourses] = useState([]);
   const [enrolledCourses, setEnrolledCourses] = useState([]);
   const [availableCourses, setAvailableCourses] = useState([]);
+  const [bioStatus, setBioStatus] = useState(null);
   const [stats, setStats] = useState({
     enrolledCount: 0,
     assignmentsCount: 0,
@@ -134,9 +139,31 @@ const StudentDashboard = () => {
     }
   };
 
+  const loadBioStatus = async () => {
+    if (user?._id) {
+      const status = await fetchBiometricStatus(user._id);
+      setBioStatus(status);
+    }
+  };
+
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+    loadBioStatus();
+  }, [user]);
+
+  const handleLaunchCalibration = async () => {
+    try {
+      await openBiometricCalibrationModal(user._id, {
+        onComplete: (updatedStatus) => {
+          setBioStatus(updatedStatus);
+          setMessage('Biometric profile successfully calibrated with BioAuth SDK!');
+          setTimeout(() => setMessage(''), 4000);
+        }
+      });
+    } catch (e) {
+      console.error('Failed to open calibration modal:', e);
+    }
+  };
 
   const handleEnroll = async (courseId) => {
     try {
@@ -173,6 +200,46 @@ const StudentDashboard = () => {
           {message}
         </div>
       )}
+
+      {/* BioAuth SDK Biometrics Security Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-900/60 rounded-2xl p-5 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-white">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/20">
+            <Fingerprint className="w-6 h-6 text-white" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base font-bold text-white tracking-tight">AI Behavioral Biometrics Security</h2>
+              <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                BioAuth SDK
+              </span>
+              {bioStatus?.state === 'full' ? (
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3" /> Fully Protected (20/20)
+                </span>
+              ) : bioStatus?.state === 'provisional' ? (
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  Provisional Model ({bioStatus?.samples_collected || 10}/20)
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-700 text-slate-300 border border-slate-600">
+                  Collecting ({bioStatus?.samples_collected || 0}/10 samples)
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+              Passive typing rhythm telemetry monitors identity during exams and sandbox tests. Powered by our multi-tenant ML service.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={handleLaunchCalibration}
+          className="px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-2 whitespace-nowrap self-stretch md:self-auto justify-center"
+        >
+          <Sparkles className="w-4 h-4" />
+          <span>{bioStatus?.state === 'full' ? 'Recalibrate Rhythm' : 'Calibrate Typing Rhythm'}</span>
+        </button>
+      </div>
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

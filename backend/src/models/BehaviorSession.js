@@ -8,9 +8,12 @@ const behaviorSessionSchema = new mongoose.Schema(
       required: true,
     },
     exam: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Quiz', // Quizzes with isExam=true
+      type: mongoose.Schema.Types.Mixed, // Quiz or Assignment ID
       required: true,
+    },
+    session: {
+      type: String, // Unique session identifier for each exam run
+      index: true,
     },
     smoothedScore: {
       type: Number,
@@ -29,6 +32,18 @@ const behaviorSessionSchema = new mongoose.Schema(
       default: null,
     },
     totalWindowsScored: {
+      type: Number,
+      default: 0,
+    },
+    tabBlurCount: {
+      type: Number,
+      default: 0,
+    },
+    pasteCount: {
+      type: Number,
+      default: 0,
+    },
+    copyCount: {
       type: Number,
       default: 0,
     },

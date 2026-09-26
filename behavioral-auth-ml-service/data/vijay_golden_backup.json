@@ -420,12 +420,5 @@
   ],
   "trusted_sessions": [],
   "baseline_trained_at": 26,
-  "recent_scores": [
-    72.40215216229542,
-    51.31055306141687,
-    72.31512304074155,
-    41.05994137789489,
-    33.34870651750448
-  ],
-  "tenant_id": "default"
+  "recent_scores": []
 }

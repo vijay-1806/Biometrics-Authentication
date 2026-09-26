@@ -21,7 +21,7 @@ const initSocket = (server) => {
     console.log(`Socket connected: ${socket.id}`);
 
     // Teacher creates a session
-    socket.on('create-session', ({ examId, pin }) => {
+    socket.on('create-session', async ({ examId, pin }) => {
       sessions[pin] = {
         teacherSocketId: socket.id,
         examId,
@@ -31,6 +31,19 @@ const initSocket = (server) => {
       socketToPin[socket.id] = pin;
       socket.join(pin); // teacher joins the room
       console.log(`Teacher created session ${pin} for exam ${examId}`);
+
+      try {
+        const BehaviorSession = require('./models/BehaviorSession');
+        const BehaviorAlert = require('./models/BehaviorAlert');
+        if (examId) {
+          await BehaviorSession.deleteMany({ exam: examId });
+          await BehaviorAlert.deleteMany({ exam: examId.toString() });
+          console.log(`Reset previous behavior session data for exam ${examId}`);
+        }
+      } catch (err) {
+        console.error('Error resetting previous behavior sessions:', err.message);
+      }
+
       socket.emit('session-created', { pin });
     });
 
@@ -53,19 +66,32 @@ const initSocket = (server) => {
 
       // If exam already active, immediately start the student
       if (session.status === 'active') {
-        socket.emit('exam-started', { examId: session.examId });
+        socket.emit('exam-started', { examId: session.examId, pin });
       } else {
-        socket.emit('join-success', { examId: session.examId });
+        socket.emit('join-success', { examId: session.examId, pin });
       }
     });
 
     // Teacher starts the exam
-    socket.on('start-exam', ({ pin }) => {
+    socket.on('start-exam', async ({ pin }) => {
       const session = sessions[pin];
       if (session && session.teacherSocketId === socket.id) {
         session.status = 'active';
+
+        try {
+          const BehaviorSession = require('./models/BehaviorSession');
+          const BehaviorAlert = require('./models/BehaviorAlert');
+          if (session.examId) {
+            await BehaviorSession.deleteMany({ exam: session.examId });
+            await BehaviorAlert.deleteMany({ exam: session.examId.toString() });
+            console.log(`Reset previous behavior session data on start-exam for ${session.examId}`);
+          }
+        } catch (err) {
+          console.error('Error resetting behavior session data on start-exam:', err.message);
+        }
+
         // Broadcast to everyone in the room (which includes students)
-        io.to(pin).emit('exam-started', { examId: session.examId });
+        io.to(pin).emit('exam-started', { examId: session.examId, pin });
         console.log(`Exam started for session ${pin}`);
       }
     });
@@ -102,11 +128,11 @@ const getIo = () => {
 
 // Helper for behaviorController to broadcast an anomaly
 const broadcastAnomaly = (examId, studentId, alertPayload) => {
-  if (!io) return;
+  if (!io || !examId) return;
   // Find if this exam has an active session and this student is in it
   for (const pin in sessions) {
     const session = sessions[pin];
-    if (session.examId.toString() === examId.toString()) {
+    if (session.examId && session.examId.toString() === examId.toString()) {
       // Send directly to the teacher's socket
       io.to(session.teacherSocketId).emit('student-anomaly', {
         studentId,
@@ -124,10 +150,10 @@ const broadcastAnomaly = (examId, studentId, alertPayload) => {
 // not just on anomalies, so the teacher dashboard can show a continuously
 // updating trust score rather than only a feed of past alerts.
 const broadcastLiveScore = (examId, studentId, data) => {
-  if (!io) return;
+  if (!io || !examId) return;
   for (const pin in sessions) {
     const session = sessions[pin];
-    if (session.examId.toString() === examId.toString()) {
+    if (session.examId && session.examId.toString() === examId.toString()) {
       io.to(session.teacherSocketId).emit('live_score', {
         studentId,
         ...data,
