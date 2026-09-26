@@ -1,0 +1,38 @@
+[
+  {
+    "_id": "6a6073fe6ad8f96c38d5a654",
+    "title": "ns",
+    "description": "ns course",
+    "teacher": "6a607276ef71e0221d15784e",
+    "studentsEnrolled": [],
+    "createdAt": "2026-07-22T07:40:46.209Z",
+    "updatedAt": "2026-07-25T05:18:05.789Z",
+    "__v": 2
+  },
+  {
+    "_id": "6a6431cc77bb35a4f10a3239",
+    "title": "git action",
+    "description": "complete all 11 tasks",
+    "teacher": "6a642f8077bb35a4f10a3238",
+    "studentsEnrolled": [
+      "6a9268397e77cbd6c3c3e886"
+    ],
+    "createdAt": "2026-07-25T03:47:24.782Z",
+    "updatedAt": "2026-08-29T05:10:46.481Z",
+    "__v": 4
+  },
+  {
+    "_id": "6a9269ed6a5e367e131910f3",
+    "title": "python",
+    "description": "basic python",
+    "teacher": "6a642f8077bb35a4f10a3238",
+    "studentsEnrolled": [
+      "6a9268397e77cbd6c3c3e886",
+      "6ab3f447e9fa5f05ade70262",
+      "6ab4975852379a75c38844e5"
+    ],
+    "createdAt": "2026-08-29T05:11:09.598Z",
+    "updatedAt": "2026-09-24T03:50:20.971Z",
+    "__v": 5
+  }
+]

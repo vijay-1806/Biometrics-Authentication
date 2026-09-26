@@ -1,0 +1,312 @@
+[
+  {
+    "_id": "6aa2728ef65314be19644fe4",
+    "student": "6a9268397e77cbd6c3c3e886",
+    "session": "easv41rstygd6nez7iwogd",
+    "context": "general",
+    "windowStartTime": "2026-09-10T09:04:12.301Z",
+    "windowEndTime": "2026-09-10T09:04:14.176Z",
+    "biometricFeatures": {
+      "dwellTimeMean": 0,
+      "dwellTimeStd": 0,
+      "flightTimeMean": 0,
+      "flightTimeStd": 0,
+      "typingSpeed": 0,
+      "backspaceRate": 0,
+      "mouseSpeedMean": 5.058211853682639,
+      "mouseSpeedStd": 0,
+      "clickCount": 0,
+      "pathCurvature": 1
+    },
+    "explicitFlags": {
+      "tabBlurCount": 1,
+      "pasteCount": 0,
+      "totalPastedChars": 0
+    },
+    "createdAt": "2026-09-10T09:04:14.213Z",
+    "updatedAt": "2026-09-10T09:04:14.213Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aa27290f65314be19644fe5",
+    "student": "6a9268397e77cbd6c3c3e886",
+    "session": "easv41rstygd6nez7iwogd",
+    "context": "general",
+    "windowStartTime": "2026-09-10T09:04:14.176Z",
+    "windowEndTime": "2026-09-10T09:04:16.450Z",
+    "biometricFeatures": {
+      "dwellTimeMean": 0,
+      "dwellTimeStd": 0,
+      "flightTimeMean": 0,
+      "flightTimeStd": 0,
+      "typingSpeed": 0,
+      "backspaceRate": 0,
+      "mouseSpeedMean": 0,
+      "mouseSpeedStd": 0,
+      "clickCount": 0,
+      "pathCurvature": 0
+    },
+    "explicitFlags": {
+      "tabBlurCount": 1,
+      "pasteCount": 0,
+      "totalPastedChars": 0
+    },
+    "createdAt": "2026-09-10T09:04:16.881Z",
+    "updatedAt": "2026-09-10T09:04:16.881Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aa272e3f65314be19644ff8",
+    "student": "6a9268397e77cbd6c3c3e886",
+    "session": "easv41rstygd6nez7iwogd",
+    "context": "general",
+    "windowStartTime": "2026-09-10T09:04:16.450Z",
+    "windowEndTime": "2026-09-10T09:05:39.184Z",
+    "biometricFeatures": {
+      "dwellTimeMean": 0,
+      "dwellTimeStd": 0,
+      "flightTimeMean": 0,
+      "flightTimeStd": 0,
+      "typingSpeed": 0,
+      "backspaceRate": 0,
+      "mouseSpeedMean": 1.3953127559947183,
+      "mouseSpeedStd": 1.485026541727857,
+      "clickCount": 0,
+      "pathCurvature": 1.0094136082678626
+    },
+    "explicitFlags": {
+      "tabBlurCount": 1,
+      "pasteCount": 0,
+      "totalPastedChars": 0
+    },
+    "createdAt": "2026-09-10T09:05:39.423Z",
+    "updatedAt": "2026-09-10T09:05:39.423Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aa272e6f65314be19644ff9",
+    "student": "6a9268397e77cbd6c3c3e886",
+    "session": "easv41rstygd6nez7iwogd",
+    "context": "general",
+    "windowStartTime": "2026-09-10T09:05:42.327Z",
+    "windowEndTime": "2026-09-10T09:05:42.378Z",
+    "biometricFeatures": {
+      "dwellTimeMean": 0,
+      "dwellTimeStd": 0,
+      "flightTimeMean": 0,
+      "flightTimeStd": 0,
+      "typingSpeed": 0,
+      "backspaceRate": 0,
+      "mouseSpeedMean": 0,
+      "mouseSpeedStd": 0,
+      "clickCount": 0,
+      "pathCurvature": 0
+    },
+    "explicitFlags": {
+      "tabBlurCount": 1,
+      "pasteCount": 0,
+      "totalPastedChars": 0
+    },
+    "createdAt": "2026-09-10T09:05:42.610Z",
+    "updatedAt": "2026-09-10T09:05:42.610Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aa272e8f65314be19644ffa",
+    "student": "6a9268397e77cbd6c3c3e886",
+    "session": "easv41rstygd6nez7iwogd",
+    "context": "general",
+    "windowStartTime": "2026-09-10T09:05:42.378Z",
+    "windowEndTime": "2026-09-10T09:05:44.456Z",
+    "biometricFeatures": {
+      "dwellTimeMean": 0,
+      "dwellTimeStd": 0,
+      "flightTimeMean": 0,
+      "flightTimeStd": 0,
+      "typingSpeed": 0,
+      "backspaceRate": 0,
+      "mouseSpeedMean": 0,
+      "mouseSpeedStd": 0,
+      "clickCount": 0,
+      "pathCurvature": 0
+    },
+    "explicitFlags": {
+      "tabBlurCount": 1,
+      "pasteCount": 0,
+      "totalPastedChars": 0
+    },
+    "createdAt": "2026-09-10T09:05:44.464Z",
+    "updatedAt": "2026-09-10T09:05:44.464Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aa2731cf65314be19645071",
+    "student": "6a642f8077bb35a4f10a3238",
+    "session": "ce2yewdzrcgrvvgk3t6e7",
+    "context": "general",
+    "windowStartTime": "2026-09-10T09:06:30.955Z",
+    "windowEndTime": "2026-09-10T09:06:35.974Z",
+    "biometricFeatures": {
+      "dwellTimeMean": 0,
+      "dwellTimeStd": 0,
+      "flightTimeMean": 0,
+      "flightTimeStd": 0,
+      "typingSpeed": 0,
+      "backspaceRate": 0,
+      "mouseSpeedMean": 0.3251042121417346,
+      "mouseSpeedStd": 0.499336367481348,
+      "clickCount": 0,
+      "pathCurvature": 3.7461976373388786
+    },
+    "explicitFlags": {
+      "tabBlurCount": 0,
+      "pasteCount": 0,
+      "totalPastedChars": 0
+    },
+    "createdAt": "2026-09-10T09:06:36.295Z",
+    "updatedAt": "2026-09-10T09:06:36.295Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aa27322f65314be1964508a",
+    "student": "6a642f8077bb35a4f10a3238",
+    "session": "ce2yewdzrcgrvvgk3t6e7",
+    "context": "general",
+    "windowStartTime": "2026-09-10T09:06:35.974Z",
+    "windowEndTime": "2026-09-10T09:06:42.844Z",
+    "biometricFeatures": {
+      "dwellTimeMean": 0,
+      "dwellTimeStd": 0,
+      "flightTimeMean": 0,
+      "flightTimeStd": 0,
+      "typingSpeed": 0,
+      "backspaceRate": 0,
+      "mouseSpeedMean": 0,
+      "mouseSpeedStd": 0,
+      "clickCount": 0,
+      "pathCurvature": 0
+    },
+    "explicitFlags": {
+      "tabBlurCount": 1,
+      "pasteCount": 0,
+      "totalPastedChars": 0
+    },
+    "createdAt": "2026-09-10T09:06:42.962Z",
+    "updatedAt": "2026-09-10T09:06:42.962Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aa27323f65314be1964508b",
+    "student": "6a642f8077bb35a4f10a3238",
+    "session": "ce2yewdzrcgrvvgk3t6e7",
+    "context": "general",
+    "windowStartTime": "2026-09-10T09:06:42.844Z",
+    "windowEndTime": "2026-09-10T09:06:43.450Z",
+    "biometricFeatures": {
+      "dwellTimeMean": 0,
+      "dwellTimeStd": 0,
+      "flightTimeMean": 0,
+      "flightTimeStd": 0,
+      "typingSpeed": 0,
+      "backspaceRate": 0,
+      "mouseSpeedMean": 0,
+      "mouseSpeedStd": 0,
+      "clickCount": 0,
+      "pathCurvature": 0
+    },
+    "explicitFlags": {
+      "tabBlurCount": 1,
+      "pasteCount": 0,
+      "totalPastedChars": 0
+    },
+    "createdAt": "2026-09-10T09:06:43.460Z",
+    "updatedAt": "2026-09-10T09:06:43.460Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aa2759af65314be19645173",
+    "student": "6a9268397e77cbd6c3c3e886",
+    "session": "8n6l8k4xfi4flnwab08n1i",
+    "context": "general",
+    "windowStartTime": "2026-09-10T09:17:12.791Z",
+    "windowEndTime": "2026-09-10T09:17:14.815Z",
+    "biometricFeatures": {
+      "dwellTimeMean": 0,
+      "dwellTimeStd": 0,
+      "flightTimeMean": 0,
+      "flightTimeStd": 0,
+      "typingSpeed": 0,
+      "backspaceRate": 0,
+      "mouseSpeedMean": 1.8783245127146317,
+      "mouseSpeedStd": 2.481190764008051,
+      "clickCount": 0,
+      "pathCurvature": 1.038134161530384
+    },
+    "explicitFlags": {
+      "tabBlurCount": 1,
+      "pasteCount": 0,
+      "totalPastedChars": 0
+    },
+    "createdAt": "2026-09-10T09:17:14.830Z",
+    "updatedAt": "2026-09-10T09:17:14.830Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aa4c4d27a8d6e99292f9e13",
+    "student": "6a9268397e77cbd6c3c3e886",
+    "session": "6av53luun9agmhtkxavch",
+    "context": "general",
+    "windowStartTime": "2026-09-12T03:19:31.446Z",
+    "windowEndTime": "2026-09-12T03:19:46.465Z",
+    "biometricFeatures": {
+      "dwellTimeMean": 0,
+      "dwellTimeStd": 0,
+      "flightTimeMean": 0,
+      "flightTimeStd": 0,
+      "typingSpeed": 0,
+      "backspaceRate": 0,
+      "mouseSpeedMean": 0.4482948557090317,
+      "mouseSpeedStd": 0.6256659079915241,
+      "clickCount": 0,
+      "pathCurvature": 1.433788405452812
+    },
+    "explicitFlags": {
+      "tabBlurCount": 0,
+      "pasteCount": 0,
+      "totalPastedChars": 0
+    },
+    "createdAt": "2026-09-12T03:19:46.153Z",
+    "updatedAt": "2026-09-12T03:19:46.153Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab3182a1b06065380b53cd8",
+    "student": "6a9268397e77cbd6c3c3e886",
+    "session": "5oekhwdx8wtlymgxtxkq69",
+    "context": "general",
+    "windowStartTime": "2026-09-23T00:07:04.962Z",
+    "windowEndTime": "2026-09-23T00:07:06.743Z",
+    "biometricFeatures": {
+      "dwellTimeMean": 0,
+      "dwellTimeStd": 0,
+      "flightTimeMean": 0,
+      "flightTimeStd": 0,
+      "typingSpeed": 0,
+      "backspaceRate": 0,
+      "mouseSpeedMean": 0.05001344697956075,
+      "mouseSpeedStd": 0,
+      "clickCount": 0,
+      "pathCurvature": 1
+    },
+    "explicitFlags": {
+      "tabBlurCount": 1,
+      "pasteCount": 0,
+      "totalPastedChars": 0,
+      "copyCount": 0,
+      "totalCopiedChars": 0
+    },
+    "createdAt": "2026-09-23T00:07:06.763Z",
+    "updatedAt": "2026-09-23T00:07:06.763Z",
+    "__v": 0
+  }
+]

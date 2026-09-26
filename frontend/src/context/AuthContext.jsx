@@ -10,7 +10,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [loading, setLoading] = useState(true);
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+  const [theme, setTheme] = useState('light');
 
   // Configure Axios headers whenever token changes
   useEffect(() => {
@@ -23,16 +23,10 @@ export const AuthProvider = ({ children }) => {
     }
   }, [token]);
 
-  // Sync theme to document element
+  // Always enforce light theme
   useEffect(() => {
-    const root = window.document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+    window.document.documentElement.classList.remove('dark');
+  }, []);
 
   // Fetch user profile on load if token exists
   useEffect(() => {

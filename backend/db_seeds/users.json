@@ -1,0 +1,76 @@
+[
+  {
+    "_id": "6a607208ef71e0221d15784c",
+    "name": "student",
+    "email": "student@gmail.com",
+    "password": "$2b$10$MyQ3UJCsBC17y7Cjft5cPeAGvLFvqu988JxmefrJaJGlkWWMz56r.",
+    "role": "teacher",
+    "createdAt": "2026-07-22T07:32:24.838Z",
+    "updatedAt": "2026-07-22T07:32:24.838Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a607276ef71e0221d15784e",
+    "name": "teacher-01",
+    "email": "teacher-01@gmail.com",
+    "password": "$2b$10$.5ackSm9AxOhzAPwdh5fheiSz.VQILE.grHTKLgyesbirN3JECbma",
+    "role": "teacher",
+    "createdAt": "2026-07-22T07:34:14.954Z",
+    "updatedAt": "2026-07-22T07:34:14.954Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a60728aef71e0221d15784f",
+    "name": "admin",
+    "email": "admin@gmail.com",
+    "password": "$2b$10$Nn7jYmamNQ3tX/lAFu6GveNjogAD940wTfuDXO4PELusCLeOHIgPi",
+    "role": "admin",
+    "createdAt": "2026-07-22T07:34:34.342Z",
+    "updatedAt": "2026-07-22T07:34:34.342Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a642f8077bb35a4f10a3238",
+    "name": "teacher",
+    "email": "teacher@gmail.com",
+    "password": "$2b$10$DHK81vncc35X8D6/OGA.kuuL09tgeeZvdbIhTzF6mZsBW.uJUQEoq",
+    "role": "teacher",
+    "createdAt": "2026-07-25T03:37:36.729Z",
+    "updatedAt": "2026-09-26T03:38:02.434Z",
+    "__v": 0,
+    "sessionId": "muhuah4yrcx8bkmi82"
+  },
+  {
+    "_id": "6a9268397e77cbd6c3c3e886",
+    "name": "Vijay",
+    "email": "vijay@gmail.com",
+    "password": "$2b$10$AuKkIL.6qIutHp0IjhsWs.wMAWWczigGaBIdiJhEiXIvkoU4Tas4.",
+    "role": "student",
+    "sessionId": "muhts4a3jua896a2cz",
+    "createdAt": "2026-08-29T05:03:53.953Z",
+    "updatedAt": "2026-09-26T03:23:45.963Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab3f447e9fa5f05ade70262",
+    "name": "ragavan",
+    "email": "ragavan@gmail.com",
+    "password": "$2b$10$F4UgWU44YVApAgkMeI1q9e0120n6ZftIX5IGw9W00ZFDeU3F.7SzO",
+    "role": "student",
+    "createdAt": "2026-09-23T15:46:15.621Z",
+    "updatedAt": "2026-09-26T03:37:44.869Z",
+    "__v": 0,
+    "sessionId": "muhua3l1u9dhntt8gx"
+  },
+  {
+    "_id": "6ab4975852379a75c38844e5",
+    "name": "sarvanth",
+    "email": "sarvanth@gmail.com",
+    "password": "$2b$10$HMitUjuK2u82tlc63ml55OP7SURZsEcPqUr8bR/vy9IKfSTBh.xrW",
+    "role": "student",
+    "createdAt": "2026-09-24T03:22:00.404Z",
+    "updatedAt": "2026-09-26T03:36:09.451Z",
+    "__v": 0,
+    "sessionId": "muhu81yh8nw50v2jalb"
+  }
+]

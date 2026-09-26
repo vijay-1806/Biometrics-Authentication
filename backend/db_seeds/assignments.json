@@ -1,0 +1,38 @@
+[
+  {
+    "_id": "6a60742c6ad8f96c38d5a655",
+    "course": "6a6073fe6ad8f96c38d5a654",
+    "title": "hello",
+    "description": "hello world ",
+    "starterCode": "// Write your solution here\nfunction solution(input) {\n  \n}",
+    "language": "python",
+    "testCases": [
+      {
+        "input": "hhello",
+        "expectedOutput": "hello",
+        "_id": "6a60742c6ad8f96c38d5a656"
+      }
+    ],
+    "createdAt": "2026-07-22T07:41:32.657Z",
+    "updatedAt": "2026-07-22T07:41:32.657Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a926a0b6a5e367e13191100",
+    "course": "6a9269ed6a5e367e131910f3",
+    "title": "add 2 numbers",
+    "description": "take 2 input and add",
+    "starterCode": "// Write your solution here\nfunction solution(input) {\n  \n}",
+    "language": "python",
+    "testCases": [
+      {
+        "input": "5 10",
+        "expectedOutput": "15",
+        "_id": "6a926a0b6a5e367e13191101"
+      }
+    ],
+    "createdAt": "2026-08-29T05:11:39.431Z",
+    "updatedAt": "2026-08-29T05:11:39.431Z",
+    "__v": 0
+  }
+]

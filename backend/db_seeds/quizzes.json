@@ -1,0 +1,111 @@
+[
+  {
+    "_id": "6a6074516ad8f96c38d5a65f",
+    "course": "6a6073fe6ad8f96c38d5a654",
+    "title": "ns",
+    "description": "ns",
+    "durationMinutes": 3010,
+    "questions": [
+      {
+        "questionText": "vimal size",
+        "options": [
+          "5",
+          "2",
+          "6",
+          "7"
+        ],
+        "correctAnswerIndex": 0,
+        "_id": "6a6074516ad8f96c38d5a660"
+      }
+    ],
+    "createdAt": "2026-07-22T07:42:09.984Z",
+    "updatedAt": "2026-07-22T07:42:09.984Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a6432f677bb35a4f10a323a",
+    "course": "6a6431cc77bb35a4f10a3239",
+    "title": "devops Quiz",
+    "description": "Inline assessment for monitoring session",
+    "durationMinutes": 30,
+    "questions": [
+      {
+        "questionType": "choice",
+        "questionText": "git cmd to enable version history?",
+        "options": [
+          "git log",
+          "git add",
+          "git commit",
+          "git init"
+        ],
+        "correctAnswerIndex": 3,
+        "_id": "6a6432f677bb35a4f10a323b"
+      },
+      {
+        "questionType": "choice",
+        "questionText": "git cmd to add into staging area?",
+        "options": [
+          "git commit",
+          "git add",
+          "git merge",
+          "git push"
+        ],
+        "correctAnswerIndex": 1,
+        "_id": "6a6432f677bb35a4f10a323c"
+      },
+      {
+        "questionType": "paragraph",
+        "questionText": "Write the common git cmds?",
+        "options": [],
+        "correctAnswerIndex": 0,
+        "_id": "6a6432f677bb35a4f10a323d"
+      }
+    ],
+    "createdAt": "2026-07-25T03:52:22.359Z",
+    "updatedAt": "2026-07-25T03:52:22.359Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a64448379226f1146063984",
+    "course": "6a6431cc77bb35a4f10a3239",
+    "title": "devops exit assessment Quiz",
+    "description": "Inline assessment for monitoring session",
+    "durationMinutes": 30,
+    "questions": [
+      {
+        "questionType": "choice",
+        "questionText": "cmd to enable version history?",
+        "options": [
+          "git add",
+          "git init",
+          "git push",
+          "git merge"
+        ],
+        "correctAnswerIndex": 1,
+        "_id": "6a64448379226f1146063985"
+      },
+      {
+        "questionType": "choice",
+        "questionText": "cmd to check status?",
+        "options": [
+          "git add",
+          "git clone",
+          "git status",
+          "git init"
+        ],
+        "correctAnswerIndex": 2,
+        "_id": "6a64448379226f1146063986"
+      },
+      {
+        "questionType": "paragraph",
+        "questionText": "explain the cmds - git init, git add, git merge, git commit?",
+        "options": [],
+        "correctAnswerIndex": 0,
+        "_id": "6a64448379226f1146063987"
+      }
+    ],
+    "createdAt": "2026-07-25T05:07:15.312Z",
+    "updatedAt": "2026-07-25T05:07:15.312Z",
+    "__v": 0
+  }
+]
