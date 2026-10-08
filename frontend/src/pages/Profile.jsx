@@ -9,7 +9,7 @@ import {
 import { Link } from 'react-router-dom';
 
 const Profile = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
 
   // Edit name state
   const [editingName, setEditingName] = useState(false);
@@ -36,7 +36,8 @@ const Profile = () => {
     }
     setNameLoading(true);
     try {
-      await axios.patch('/api/auth/profile', { name: displayName.trim() });
+      const { data } = await axios.patch('/api/auth/profile', { name: displayName.trim() });
+      updateUser(data);
       setNameMsg('Name updated successfully!');
       setTimeout(() => setNameMsg(''), 3000);
     } catch (err) {
@@ -198,15 +199,17 @@ const Profile = () => {
                 </div>
               )}
 
-              <div className="flex items-center gap-3">
+              {user?.role === 'student' && <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
                   <UserCheck size={16} />
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Biometrics Profile</p>
-                  <p className="text-sm font-semibold text-slate-700 mt-0.5">Continuous Auth Active</p>
+                  <Link to="/ml-training" className="mt-0.5 inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:underline">
+                    Review identity setup <ArrowRight size={14} />
+                  </Link>
                 </div>
-              </div>
+              </div>}
             </div>
           </div>
         </div>

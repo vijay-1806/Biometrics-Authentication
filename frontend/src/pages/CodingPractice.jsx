@@ -5,6 +5,7 @@ import { io } from 'socket.io-client';
 import Editor from '@monaco-editor/react';
 import { useAuth } from '../context/AuthContext';
 import useBehaviorTracking from '../hooks/useBehaviorTracking';
+import Layout from '../components/Common/Layout';
 import {
   Play,
   Send,
@@ -50,6 +51,9 @@ const CodingPractice = () => {
   const [sessionError, setSessionError] = useState('');
   const [sessionJoinedPin, setSessionJoinedPin] = useState('');
   const [sessionEndedModal, setSessionEndedModal] = useState(false);
+  const [sessionEndsAt, setSessionEndsAt] = useState(null);
+  const [timeRemaining, setTimeRemaining] = useState(null);
+  const [finalSubmissionState, setFinalSubmissionState] = useState('idle');
   const socketRef = useRef(null);
 
   // Behavior tracking — only active after exam starts to avoid false tab-switch alerts
@@ -64,6 +68,12 @@ const CodingPractice = () => {
   const [assignment, setAssignment] = useState(null);
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('javascript');
+  const codeRef = useRef('');
+  const languageRef = useRef('javascript');
+  const submissionStartedRef = useRef(false);
+  const sessionStartedRef = useRef(false);
+  codeRef.current = code;
+  languageRef.current = language;
   const [submissions, setSubmissions] = useState([]);
 
   const [running, setRunning] = useState(false);
@@ -85,7 +95,10 @@ const CodingPractice = () => {
         axios.get(`/api/assignments/${id}/submissions`)
       ]);
       setAssignment(assignmentRes.data);
-      setCode(assignmentRes.data.starterCode || '');
+      if (!assignmentRes.data.isLiveAssessment) { setInSession(true); setWaitingForStart(false); setExamActive(false); }
+      let savedDraft = '';
+      try { savedDraft = localStorage.getItem(`coding-draft:${id}:${user?._id}`) || ''; } catch {}
+      setCode(savedDraft || assignmentRes.data.starterCode || '');
       setLanguage(assignmentRes.data.language || 'javascript');
       setSubmissions(submissionsRes.data);
     } catch (err) {
@@ -104,13 +117,16 @@ const CodingPractice = () => {
       setSessionJoinedPin(persistedPin);
       setInSession(true);
       setWaitingForStart(false);
-      setExamActive(true);
       reconnectSocket(persistedPin);
     } else if (queryPin && queryPin.length === 6) {
       // Auto-join if valid 6-digit pin passed in URL
       executeJoin(queryPin);
     }
   }, [id]);
+
+  useEffect(() => {
+    if (user?._id && code) localStorage.setItem(`coding-draft:${id}:${user._id}`, code);
+  }, [id, user?._id, code]);
 
   // ── Strict Session Lock Behavior ──────────────────────────────────────────
   useEffect(() => {
@@ -140,19 +156,38 @@ const CodingPractice = () => {
 
   const reconnectSocket = (pin) => {
     const socketHost = typeof window !== 'undefined' ? `http://${window.location.hostname}:5000` : 'http://localhost:5000';
-    const socket = io(socketHost, { transports: ['websocket', 'polling'] });
+    const socket = io(socketHost, { transports: ['websocket', 'polling'], auth: { token: localStorage.getItem('token') } });
     socketRef.current = socket;
 
     socket.emit('rejoin-session', { pin, student: { id: user._id, name: user.name, email: user.email } });
 
+    socket.on('exam-started', (sessionInfo = {}) => {
+      setInSession(true);
+      setWaitingForStart(false);
+      setExamActive(true);
+      sessionStartedRef.current = true;
+      setSessionEndsAt(sessionInfo.endsAt || null);
+      if (sessionInfo.assessmentSessionId) sessionStorage.setItem(`assessment-session:${id}`, sessionInfo.assessmentSessionId);
+      fetchAssignmentData();
+    });
+    socket.on('join-error', (message) => {
+      setSessionError(message);
+      sessionStorage.removeItem(`exam_pin_${id}`);
+      sessionStorage.removeItem(`exam_in_session_${id}`);
+      setExamActive(false);
+      setInSession(false);
+    });
     socket.on('session-ended', () => {
+      if (sessionStartedRef.current) handleSubmitCode(null, true);
       handleTeacherEndedSession();
     });
+    socket.on('connect_error', () => setSessionError('Could not reconnect to the assessment room. Your draft is saved on this device.'));
   };
 
   const handleTeacherEndedSession = () => {
     sessionStorage.removeItem(`exam_pin_${id}`);
     sessionStorage.removeItem(`exam_in_session_${id}`);
+    sessionStorage.removeItem(`assessment-session:${id}`);
     setExamActive(false);
     setInSession(false);
     setSessionEndedModal(true);
@@ -163,7 +198,7 @@ const CodingPractice = () => {
     setSessionError('');
 
     const socketHost = typeof window !== 'undefined' ? `http://${window.location.hostname}:5000` : 'http://localhost:5000';
-    socketRef.current = io(socketHost, { transports: ['websocket', 'polling'] });
+    socketRef.current = io(socketHost, { transports: ['websocket', 'polling'], auth: { token: localStorage.getItem('token') } });
     const socket = socketRef.current;
 
     socket.emit('join-session', { pin, student: { id: user._id, name: user.name, email: user.email } });
@@ -175,12 +210,16 @@ const CodingPractice = () => {
       setExamActive(false); // Don't track tab yet - still in lobby
     });
 
-    socket.on('exam-started', () => {
+    socket.on('exam-started', (sessionInfo = {}) => {
       setInSession(true);
       setWaitingForStart(false);
       setExamActive(true); // NOW activate proctoring & lock
+      sessionStartedRef.current = true;
+      setSessionEndsAt(sessionInfo.endsAt || null);
       sessionStorage.setItem(`exam_pin_${id}`, pin);
       sessionStorage.setItem(`exam_in_session_${id}`, 'true');
+      if (sessionInfo.assessmentSessionId) sessionStorage.setItem(`assessment-session:${id}`, sessionInfo.assessmentSessionId);
+      fetchAssignmentData();
     });
 
     socket.on('join-error', (msg) => {
@@ -189,6 +228,7 @@ const CodingPractice = () => {
     });
 
     socket.on('session-ended', () => {
+      if (sessionStartedRef.current) handleSubmitCode(null, true);
       handleTeacherEndedSession();
     });
   };
@@ -223,28 +263,43 @@ const CodingPractice = () => {
     }
   };
 
-  const handleSubmitCode = async (e) => {
+  const handleSubmitCode = async (e, automatic = false) => {
     if (e) e.preventDefault();
-    if (!code) return;
+    const codeToSubmit = automatic ? codeRef.current : code;
+    const languageToSubmit = automatic ? languageRef.current : language;
+    if (!codeToSubmit || submissionStartedRef.current) return;
+    submissionStartedRef.current = true;
+    if (automatic) setFinalSubmissionState('saving');
     try {
       setSubmitting(true);
       setActiveRightTab('tests');
       setConsoleOutput('Submitting final assessment solution...\n');
-      const res = await axios.post(`/api/assignments/${id}/submit`, { code, language });
+      const res = await axios.post(`/api/assignments/${id}/submit`, { code: codeToSubmit, language: languageToSubmit });
       setConsoleOutput(res.data.consoleOutput || 'Solution submitted successfully.');
       setRunResults(res.data.results || []);
       setStatus(res.data.status);
+      if (automatic) setFinalSubmissionState('saved');
 
       // Refresh submissions list
       const subsRes = await axios.get(`/api/assignments/${id}/submissions`);
       setSubmissions(subsRes.data);
     } catch (err) {
+      submissionStartedRef.current = false;
+      if (automatic) setFinalSubmissionState('failed');
       setConsoleOutput(`Submission Error:\n${err.response?.data?.message || err.message}`);
       setStatus('compile_error');
     } finally {
       setSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (!examActive || !sessionEndsAt) return undefined;
+    const updateRemaining = () => setTimeRemaining(Math.max(0, Math.ceil((new Date(sessionEndsAt).getTime() - Date.now()) / 1000)));
+    updateRemaining();
+    const timer = setInterval(updateRemaining, 1000);
+    return () => clearInterval(timer);
+  }, [examActive, sessionEndsAt]);
 
   if (loading) {
     return (
@@ -276,7 +331,7 @@ const CodingPractice = () => {
             Exam Session Concluded
           </h2>
           <p style={{ fontSize: '13px', color: '#64748b', lineHeight: '1.5', margin: '0 0 24px' }}>
-            Your instructor has officially ended the live exam session. All your code submissions and behavioral biometrics telemetry have been archived.
+            {finalSubmissionState === 'saving' ? 'Saving your final code submission…' : finalSubmissionState === 'saved' ? 'Your final code was saved. You can review your attempts and feedback below.' : finalSubmissionState === 'failed' ? 'The final submission could not sync. Your code draft remains saved on this device.' : 'The room has closed. Your draft remains saved on this device.'}
           </p>
           <button
             onClick={() => navigate('/my-performance')}
@@ -430,9 +485,9 @@ const CodingPractice = () => {
   }
 
   // ── Redesigned Google Workspace–Inspired Exam Layout ──────────────────────
-  return (
+  const workspace = (
     <div style={{
-      display: 'flex', flexDirection: 'column', height: '100vh',
+      display: 'flex', flexDirection: 'column', height: assignment?.isLiveAssessment ? '100vh' : 'calc(100vh - 145px)', minHeight: '620px',
       background: '#f8fafc', overflow: 'hidden', fontFamily: 'inherit'
     }}>
       {/* ── TOP BAR: Google Workspace Header (Clean white card, rounded pills, tactile buttons) ── */}
@@ -456,12 +511,12 @@ const CodingPractice = () => {
               <span style={{ fontWeight: '800', fontSize: '15px', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {assignment?.title}
               </span>
-              <span style={{
+              {assignment?.isLiveAssessment && <span style={{
                 background: '#f1f5f9', color: '#475569', fontSize: '10px',
                 fontWeight: '800', padding: '2px 8px', borderRadius: '6px', textTransform: 'uppercase'
               }}>
                 PIN {sessionJoinedPin}
-              </span>
+              </span>}
             </div>
           </div>
         </div>
@@ -469,13 +524,16 @@ const CodingPractice = () => {
         {/* Center: Live Proctor & Session Lock Indicator */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: '8px',
-          background: '#f0fdf4', border: '1px solid #bbf7d0',
+          background: assignment?.isLiveAssessment ? '#f0fdf4' : '#f1f5f9', border: `1px solid ${assignment?.isLiveAssessment ? '#bbf7d0' : '#cbd5e1'}`,
           padding: '5px 14px', borderRadius: '20px'
         }}>
-          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', animation: 'pulse 1.8s infinite' }} />
-          <span style={{ fontSize: '11px', fontWeight: '800', color: '#15803d' }}>
-            Session Locked · BioAuth Proctored
+          {assignment?.isLiveAssessment && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', animation: 'pulse 1.8s infinite' }} />}
+          <span style={{ fontSize: '11px', fontWeight: '800', color: assignment?.isLiveAssessment ? '#15803d' : '#475569' }}>
+            {assignment?.isLiveAssessment ? 'Session Locked · BioAuth Proctored' : 'Practice mode · work at your own pace'}
           </span>
+          {timeRemaining !== null && <span aria-live="off" style={{ marginLeft: 4, paddingLeft: 10, borderLeft: '1px solid #bbf7d0', fontSize: '12px', fontWeight: 800, color: timeRemaining < 300 ? '#b42318' : '#166534', fontVariantNumeric: 'tabular-nums' }}>
+            {Math.floor(timeRemaining / 60).toString().padStart(2, '0')}:{(timeRemaining % 60).toString().padStart(2, '0')} left
+          </span>}
         </div>
 
         {/* Right: Language Dropdown + Run & Submit Buttons (Google Workspace Style) */}
@@ -806,6 +864,7 @@ const CodingPractice = () => {
       </div>
     </div>
   );
+  return assignment?.isLiveAssessment ? workspace : <Layout>{workspace}</Layout>;
 };
 
 export default CodingPractice;

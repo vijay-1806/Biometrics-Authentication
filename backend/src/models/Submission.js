@@ -24,6 +24,7 @@ const submissionSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    assessmentSessionId: { type: String, index: true },
     status: {
       type: String,
       enum: ['pass', 'fail', 'compile_error'],

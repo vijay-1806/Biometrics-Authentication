@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   getCourses,
+  getStudentLiveAssessments,
   getCourseById,
   createCourse,
   enrollInCourse,
@@ -12,6 +13,8 @@ const { protect, authorize } = require('../middleware/authMiddleware');
 router.route('/')
   .get(protect, getCourses)
   .post(protect, authorize('teacher', 'admin'), createCourse);
+
+router.get('/live-assessments', protect, authorize('student'), getStudentLiveAssessments);
 
 router.route('/:id')
   .get(protect, getCourseById)

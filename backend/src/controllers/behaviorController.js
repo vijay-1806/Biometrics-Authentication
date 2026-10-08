@@ -4,7 +4,12 @@ const BehaviorSession = require('../models/BehaviorSession');
 const BehaviorAlert = require('../models/BehaviorAlert');
 const Course = require('../models/Course');
 const Quiz = require('../models/Quiz');
-const { broadcastAnomaly, broadcastLiveScore } = require('../socketHandler');
+const Assignment = require('../models/Assignment');
+const AssessmentSession = require('../models/AssessmentSession');
+const User = require('../models/User');
+const Result = require('../models/Result');
+const Submission = require('../models/Submission');
+const { broadcastAnomaly, broadcastLiveScore, isStudentAuthorizedForExam } = require('../socketHandler');
 
 // URL and API Key for Behavioral Auth API Service
 const BEHAVIOR_API_URL = process.env.BEHAVIOR_API_URL || 'http://127.0.0.1:8000';
@@ -183,6 +188,16 @@ const scoreWindow = async (req, res) => {
     const { examId, events, deviceInfo } = req.body;
     const studentId = req.user._id;
 
+    let assessmentSessionId = null;
+    if (req.user.role === 'student') {
+      const activeSession = await isStudentAuthorizedForExam(studentId, examId);
+      if (!activeSession.authorized) return res.status(403).json({ message: 'An active, joined assessment room is required for biometric telemetry.' });
+      assessmentSessionId = activeSession.session.assessmentSessionId;
+      if (req.body.session && String(req.body.session) !== String(assessmentSessionId)) {
+        return res.status(403).json({ message: 'Assessment telemetry session does not match the active room.' });
+      }
+    }
+
     if (!events || !Array.isArray(events)) {
       return res.status(400).json({ message: 'Invalid payload: missing events array.' });
     }
@@ -197,7 +212,7 @@ const scoreWindow = async (req, res) => {
 
     // 1. Get or create session scoped by sessionToken so previous sessions never bleed over
     let session = null;
-    const sessionToken = req.body.session;
+    const sessionToken = assessmentSessionId || req.body.session;
     if (examId) {
       if (sessionToken) {
         session = await BehaviorSession.findOne({ student: studentId, exam: examId, session: sessionToken });
@@ -210,6 +225,7 @@ const scoreWindow = async (req, res) => {
           student: studentId,
           exam: examId,
           session: sessionToken || 'default_session',
+          assessmentSessionId: assessmentSessionId || undefined,
           smoothedScore: 0.0,
           history: [],
           totalWindowsScored: 0,
@@ -244,14 +260,14 @@ const scoreWindow = async (req, res) => {
       if (changed && !session.deviceChangeFlagged) {
         const alert = await BehaviorAlert.create({
           student: studentId,
-          session: req.body.session || (examId ? examId.toString() : 'exam_session'),
+          session: sessionToken || (examId ? examId.toString() : 'exam_session'),
           exam: examId ? examId.toString() : undefined,
           alertType: 'device_change',
           topDeviatingFeatures: { from: session.initialDeviceInfo, to: deviceInfo },
           severity: 'low',
           reviewed: false
         });
-        if (examId) broadcastAnomaly(examId, studentId, alert);
+        if (examId) broadcastAnomaly(examId, studentId, alert, assessmentSessionId);
         session.deviceChangeFlagged = true;
       }
     } else if (session && deviceInfo && !session.initialDeviceInfo) {
@@ -263,7 +279,7 @@ const scoreWindow = async (req, res) => {
       const alert = await BehaviorAlert.create({
         student: studentId,
         exam: examId ? examId.toString() : undefined,
-        session: req.body.session || (examId ? examId.toString() : 'exam_session'),
+        session: sessionToken || (examId ? examId.toString() : 'exam_session'),
         alertType: 'paste_detected',
         topDeviatingFeatures: {
           pasteCount: explicitFlags.pasteCount,
@@ -272,7 +288,7 @@ const scoreWindow = async (req, res) => {
         severity: 'medium',
         reviewed: false
       });
-      if (examId) broadcastAnomaly(examId, studentId, alert);
+      if (examId) broadcastAnomaly(examId, studentId, alert, assessmentSessionId);
     }
 
     // Copy detection
@@ -280,7 +296,7 @@ const scoreWindow = async (req, res) => {
       const alert = await BehaviorAlert.create({
         student: studentId,
         exam: examId ? examId.toString() : undefined,
-        session: req.body.session || (examId ? examId.toString() : 'exam_session'),
+        session: sessionToken || (examId ? examId.toString() : 'exam_session'),
         alertType: 'copy_detected',
         topDeviatingFeatures: {
           copyCount: explicitFlags.copyCount,
@@ -289,7 +305,7 @@ const scoreWindow = async (req, res) => {
         severity: 'low',
         reviewed: false
       });
-      if (examId) broadcastAnomaly(examId, studentId, alert);
+      if (examId) broadcastAnomaly(examId, studentId, alert, assessmentSessionId);
     }
 
     // Tab-switch detection
@@ -297,13 +313,13 @@ const scoreWindow = async (req, res) => {
       const alert = await BehaviorAlert.create({
         student: studentId,
         exam: examId ? examId.toString() : undefined,
-        session: req.body.session || (examId ? examId.toString() : 'exam_session'),
+        session: sessionToken || (examId ? examId.toString() : 'exam_session'),
         alertType: 'tab_switch',
         topDeviatingFeatures: { tabBlurCount: explicitFlags.tabBlurCount },
         severity: 'low',
         reviewed: false
       });
-      if (examId) broadcastAnomaly(examId, studentId, alert);
+      if (examId) broadcastAnomaly(examId, studentId, alert, assessmentSessionId);
     }
 
     // 4. ML biometric verification (only call Python /verify if enough keystrokes exist)
@@ -405,7 +421,7 @@ const scoreWindow = async (req, res) => {
         if ((verifyResult.action === 'deny' || verifyResult.action === 'step_up') && !session.alreadyFlaggedRecently) {
           const alert = await BehaviorAlert.create({
             student: studentId,
-            session: req.body.session || examId.toString(),
+            session: sessionToken || examId.toString(),
             exam: examId ? examId.toString() : undefined,
             alertType: 'behavioral_anomaly',
             score: session.smoothedScore,
@@ -414,7 +430,7 @@ const scoreWindow = async (req, res) => {
             severity: verifyResult.action === 'deny' ? 'high' : 'medium',
             reviewed: false
           });
-          if (examId) broadcastAnomaly(examId, studentId, alert);
+          if (examId) broadcastAnomaly(examId, studentId, alert, assessmentSessionId);
 
           session.alreadyFlaggedRecently = true;
           session.flagTimeoutEnd = new Date(now + 60000);
@@ -441,7 +457,7 @@ const scoreWindow = async (req, res) => {
           copyCount: session.copyCount || 0,
           state: session.modelState || verifyResult?.state || 'ready',
           totalWindowsScored: session.totalWindowsScored
-        });
+        }, assessmentSessionId);
       }
     }
 
@@ -810,6 +826,65 @@ const getTeacherAnalytics = async (req, res) => {
   }
 };
 
+const getAssessmentHistory = async (req, res) => {
+  try {
+    const filter = {};
+    if (req.user.role === 'teacher') {
+      const courses = await Course.find({ teacher: req.user._id }).distinct('_id');
+      filter.course = { $in: courses.map(String) };
+    }
+    const sessions = await AssessmentSession.find(filter).sort({ createdAt: -1 }).limit(100).lean();
+    const rows = await Promise.all(sessions.map(async (session) => {
+      const course = await Course.findById(session.course).select('title').lean();
+      let assessment = await Quiz.findById(session.assessment).select('title isExam').lean();
+      let kind = 'quiz';
+      if (!assessment) { assessment = await Assignment.findById(session.assessment).select('title').lean(); kind = 'assignment'; }
+      const [users, behaviors, results, submissions, alerts] = await Promise.all([
+        User.find({ _id: { $in: (session.participants || []).map(p => p.student) } }).select('name email').lean(),
+        BehaviorSession.find({ assessmentSessionId: String(session._id) }).lean(),
+        Result.find({ assessmentSessionId: String(session._id) }).lean(),
+        Submission.find({ assessmentSessionId: String(session._id) }).lean(),
+        BehaviorAlert.find({ session: String(session._id), alertType: 'teacher_flag' }).lean(),
+      ]);
+      const candidates = (session.participants || []).map(({ student }) => {
+        const sid = String(student);
+        const user = users.find(u => String(u._id) === sid);
+        const behavior = behaviors.find(b => String(b.student) === sid);
+        const result = results.find(r => String(r.student) === sid);
+        const submission = submissions.find(r => String(r.student) === sid);
+        const manuallyFlagged = alerts.some(a => String(a.student) === sid);
+        return { studentId: sid, name: user?.name || 'Student', email: user?.email || '', trustScore: behavior?.totalWindowsScored ? behavior.smoothedScore : null, riskLevel: manuallyFlagged ? 'review' : !behavior?.totalWindowsScored ? 'unscored' : (behavior.smoothedScore < 50 ? 'high' : behavior.smoothedScore < 75 ? 'medium' : 'low'), manuallyFlagged, examScore: result ? `${result.score}/${result.totalQuestions} (${result.percentage}%)` : submission ? `${submission.testCasesPassed}/${submission.testCasesTotal} tests` : 'Not submitted', tabSwitches: behavior?.tabBlurCount || 0, pasteEvents: behavior?.pasteCount || 0, windowsScored: behavior?.totalWindowsScored || 0 };
+      });
+      return { ...session, courseTitle: course?.title || 'Course', assessmentTitle: assessment?.title || 'Assessment', kind, candidates };
+    }));
+    res.json(rows);
+  } catch (error) {
+    console.error('Assessment history error:', error);
+    res.status(500).json({ message: 'Could not load assessment history.' });
+  }
+};
+
+const flagAssessmentCandidate = async (req, res) => {
+  try {
+    const { assessmentSessionId, studentId } = req.params;
+    const session = await AssessmentSession.findById(assessmentSessionId);
+    if (!session) return res.status(404).json({ message: 'Assessment session not found.' });
+    if (req.user.role === 'teacher') {
+      const course = await Course.findById(session.course).select('teacher');
+      if (!course || String(course.teacher) !== String(req.user._id)) return res.status(403).json({ message: 'You cannot review this session.' });
+    }
+    if (!(session.participants || []).some(p => String(p.student) === String(studentId))) return res.status(404).json({ message: 'Student did not join this assessment.' });
+    const existingFlag = await BehaviorAlert.findOne({ session: String(session._id), student: studentId, alertType: 'teacher_flag' });
+    if (existingFlag) return res.json(existingFlag);
+    const behavior = await BehaviorSession.findOne({ assessmentSessionId: String(session._id), student: studentId });
+    const alert = await BehaviorAlert.create({ student: studentId, session: String(session._id), exam: String(session.assessment), alertType: 'teacher_flag', score: behavior?.smoothedScore ?? null, topDeviatingFeatures: { note: String(req.body.note || 'Teacher flagged this candidate for review.').slice(0, 500) }, severity: 'medium', reviewed: false });
+    res.status(201).json(alert);
+  } catch (error) {
+    console.error('Candidate flag error:', error);
+    res.status(500).json({ message: 'Could not flag this candidate.' });
+  }
+};
+
 module.exports = {
   postWindow,
   scoreWindow,
@@ -821,5 +896,7 @@ module.exports = {
   getPassage,
   retrainUser,
   getSessionReport,
-  getTeacherAnalytics
+  getTeacherAnalytics,
+  getAssessmentHistory,
+  flagAssessmentCandidate
 };

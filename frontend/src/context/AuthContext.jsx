@@ -82,7 +82,7 @@ export const AuthProvider = ({ children }) => {
 
     fetchUser();
 
-    // Heartbeat every 5 seconds to detect single-session eviction when logged in from another device
+    // Check once every 30 seconds to limit repetitive profile traffic while still detecting account changes.
     if (token) {
       intervalId = setInterval(async () => {
         try {
@@ -90,7 +90,7 @@ export const AuthProvider = ({ children }) => {
         } catch (err) {
           // Interceptor will trigger force-logout if 401 sessionExpired
         }
-      }, 5000);
+      }, 30000);
     }
 
     return () => {
@@ -155,6 +155,7 @@ export const AuthProvider = ({ children }) => {
         login,
         register,
         logout,
+        updateUser: (updates) => setUser(current => current ? { ...current, ...updates } : current),
         toggleTheme,
       }}
     >

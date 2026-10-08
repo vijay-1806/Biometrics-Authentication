@@ -1,0 +1,30 @@
+[
+  {
+    "id": "aud_b44a27067508",
+    "timestamp": "2026-10-07T06:29:42.956413+00:00",
+    "actor": "Vijay",
+    "action": "api_key_revealed",
+    "details": "Temporarily revealed API key 'key_lms_default'."
+  },
+  {
+    "id": "aud_2233e47f22f8",
+    "timestamp": "2026-10-07T04:42:42.042425+00:00",
+    "actor": "Vijay",
+    "action": "api_key_revealed",
+    "details": "Temporarily revealed API key 'key_lms_default'."
+  },
+  {
+    "id": "aud_053545085e78",
+    "timestamp": "2026-09-29T05:43:01.099608+00:00",
+    "actor": "Vijay",
+    "action": "api_key_deleted",
+    "details": "Permanently deleted revoked API key 'key_24e6fd5ac783248d'."
+  },
+  {
+    "id": "aud_5b9267287cd7",
+    "timestamp": "2026-09-29T05:42:54.225018+00:00",
+    "actor": "Vijay",
+    "action": "api_key_revoked",
+    "details": "Revoked API key 'key_24e6fd5ac783248d'."
+  }
+]

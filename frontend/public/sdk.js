@@ -78,6 +78,47 @@
     }
 
     /**
+     * Validate current API key and fetch tenant identity, tier & scopes
+     */
+    async validateKey() {
+      try {
+        const res = await fetch(`${this.apiUrl}/api-keys/validate`, {
+          headers: this._headers()
+        });
+        return res.ok ? await res.json() : { valid: false, error: 'Unauthorized key' };
+      } catch (err) {
+        return { valid: false, error: err.message };
+      }
+    }
+
+    /**
+     * Get BaaS cluster health and in-memory cache telemetry
+     */
+    async getHealth() {
+      try {
+        const res = await fetch(`${this.apiUrl}/v1/system/health`);
+        return res.ok ? await res.json() : null;
+      } catch (err) {
+        return null;
+      }
+    }
+
+    /**
+     * Fetch real-time verification and enrollment metrics for tenant
+     */
+    async getTenantUsage(tenantId) {
+      try {
+        const tid = tenantId || (await this.validateKey()).tenant_id || 'default';
+        const res = await fetch(`${this.apiUrl}/v1/tenants/${encodeURIComponent(tid)}/usage`, {
+          headers: this._headers()
+        });
+        return res.ok ? await res.json() : null;
+      } catch (err) {
+        return null;
+      }
+    }
+
+    /**
      * Launch the Drop-in Calibration Modal for 20-sample training
      */
     async openEnrollmentModal(options = {}) {

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   createAssignment,
+  configureLiveAssessment,
   getAssignmentById,
   runAssignmentCode,
   submitAssignment,
@@ -14,6 +15,8 @@ router.route('/')
 
 router.route('/:id')
   .get(protect, getAssignmentById);
+
+router.patch('/:id/live', protect, authorize('teacher', 'admin'), configureLiveAssessment);
 
 router.route('/:id/run')
   .post(protect, runAssignmentCode);

@@ -3,17 +3,17 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard,
-  KeyRound,
   TrendingUp,
   User,
   LogOut,
-  Brain,
   ShieldAlert,
   ChevronRight,
-  AlertCircle
+  ClipboardList,
+  ShieldCheck,
+  BarChart3
 } from 'lucide-react';
 
-const Sidebar = () => {
+const Sidebar = ({ mobileOpen = false, onNavigate = () => {} }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -22,23 +22,24 @@ const Sidebar = () => {
 
   const getNavLinks = () => {
     const studentLinks = [
-      { path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard },
-      { path: '/attend-exam', name: 'Attend Exam', icon: KeyRound },
-      { path: '/my-performance', name: 'My Performance', icon: TrendingUp },
-      { path: '/ml-training', name: 'ML Training Data', icon: Brain },
-      { path: '/profile', name: 'My Profile', icon: User },
+      { path: '/dashboard', name: 'My learning', icon: LayoutDashboard },
+      { path: '/live-assessments', name: 'Live assessments', icon: ShieldCheck },
+      { path: '/my-performance', name: 'Grades & progress', icon: TrendingUp },
+      { path: '/profile', name: 'Account settings', icon: User },
     ];
 
     const teacherLinks = [
-      { path: '/dashboard', name: 'Teacher Panel', icon: LayoutDashboard },
-      { path: '/admin/behavior', name: 'Proctor Monitor', icon: ShieldAlert },
-      { path: '/profile', name: 'My Profile', icon: User },
+      { path: '/dashboard', name: 'Teaching overview', icon: LayoutDashboard },
+      { path: '/teacher/assessments/new', name: 'Create assessment', icon: ClipboardList },
+      { path: '/teacher/results', name: 'Assessment results', icon: BarChart3 },
+      { path: '/profile', name: 'Account settings', icon: User },
     ];
 
     const adminLinks = [
-      { path: '/dashboard', name: 'Admin Control', icon: LayoutDashboard },
-      { path: '/admin/behavior', name: 'Proctor Monitor', icon: ShieldAlert },
-      { path: '/profile', name: 'My Profile', icon: User },
+      { path: '/dashboard', name: 'System overview', icon: LayoutDashboard },
+      { path: '/admin/behavior', name: 'Live monitoring', icon: ShieldAlert },
+      { path: '/teacher/results', name: 'Assessment results', icon: BarChart3 },
+      { path: '/profile', name: 'Account settings', icon: User },
     ];
 
     if (user?.role === 'student') return studentLinks;
@@ -56,7 +57,7 @@ const Sidebar = () => {
 
   return (
     <>
-      <aside className="w-60 bg-white border-r border-slate-200 flex flex-col h-full" style={{ boxShadow: '1px 0 0 #f1f5f9' }}>
+      <aside className={`app-sidebar w-60 bg-white border-r border-slate-200 flex flex-col h-full ${mobileOpen ? 'mobile-open' : ''}`} style={{ boxShadow: '1px 0 0 #f1f5f9' }}>
         {/* Brand */}
         <div className="h-16 flex items-center px-5 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
@@ -86,7 +87,7 @@ const Sidebar = () => {
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 pt-2 pb-1.5">Navigation</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 pt-2 pb-1.5">Learning space</p>
           {navLinks.map((link) => {
             const Icon = link.icon;
             const active = isActive(link.path);
@@ -94,6 +95,7 @@ const Sidebar = () => {
               <Link
                 key={link.path}
                 to={link.path}
+                onClick={onNavigate}
                 className={`lms-nav-link ${active ? 'active' : ''}`}
               >
                 <Icon size={17} className={active ? 'text-brand-600' : 'text-slate-400'} />
@@ -147,7 +149,7 @@ const Sidebar = () => {
               Sign Out Confirmation
             </h3>
             <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 24px', lineHeight: '1.5' }}>
-              Are you sure you want to sign out? Any unsaved live exam or session work may be disrupted.
+              Active assessment rooms remain available until their teacher ends them or the timer expires. Draft answers are saved on this device.
             </p>
 
             <div style={{ display: 'flex', gap: '10px' }}>

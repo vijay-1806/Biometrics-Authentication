@@ -1,0 +1,30 @@
+{
+  "60983695beef5c210ff75632961dba2e8c680d430bc34b1184127c845ee527ca": {
+    "token": "60983695beef5c210ff75632961dba2e8c680d430bc34b1184127c845ee527ca",
+    "user_id": "usr_812373e6d882c95d",
+    "active_tenant_id": "acme-university",
+    "created_at": "2026-10-07T03:43:51.672775+00:00",
+    "expires_at": "2026-10-21T03:43:51.672775+00:00"
+  },
+  "2765df64f9ced131da6262022d7a3279b8758eea8dc97fb3f6b8a8a5a3c63185": {
+    "token": "2765df64f9ced131da6262022d7a3279b8758eea8dc97fb3f6b8a8a5a3c63185",
+    "user_id": "usr_719c3af0ad854ab7",
+    "active_tenant_id": null,
+    "created_at": "2026-10-07T03:43:51.930961+00:00",
+    "expires_at": "2026-10-21T03:43:51.929928+00:00"
+  },
+  "023da34b0f2566530a62e02e2e55b3de10b5ac80eed158685a2e8e8bdfa8992a": {
+    "token": "023da34b0f2566530a62e02e2e55b3de10b5ac80eed158685a2e8e8bdfa8992a",
+    "user_id": "usr_superadmin_01",
+    "active_tenant_id": "default",
+    "created_at": "2026-10-08T09:00:46.003475+00:00",
+    "expires_at": "2026-10-22T09:00:46.003475+00:00"
+  },
+  "2a1d6b0cdee469c3b3099c22ef509724180903d37a1f14e3c9ab6f2685b1f355": {
+    "token": "2a1d6b0cdee469c3b3099c22ef509724180903d37a1f14e3c9ab6f2685b1f355",
+    "user_id": "usr_superadmin_01",
+    "active_tenant_id": "default",
+    "created_at": "2026-10-08T09:01:30.084202+00:00",
+    "expires_at": "2026-10-22T09:01:30.084202+00:00"
+  }
+}

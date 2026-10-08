@@ -23,7 +23,7 @@
     "_id": "6a60728aef71e0221d15784f",
     "name": "admin",
     "email": "admin@gmail.com",
-    "password": "$2b$10$Nn7jYmamNQ3tX/lAFu6GveNjogAD940wTfuDXO4PELusCLeOHIgPi",
+    "password": "$2b$10$TQ30ygOMk9eVeDmKpDMK3O1osLlLjhwsz.ILe23JUex0ufT7N1T16",
     "role": "admin",
     "createdAt": "2026-07-22T07:34:34.342Z",
     "updatedAt": "2026-07-22T07:34:34.342Z",

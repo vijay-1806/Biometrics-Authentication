@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -15,7 +15,6 @@ import {
   Info,
   AlertTriangle,
   Clock,
-  KeyRound,
   CheckCheck,
   Zap
 } from 'lucide-react';
@@ -47,7 +46,7 @@ const NotificationPanel = ({ notifications, onClose, onMarkRead, onMarkAllRead }
                 </span>
               )}
             </div>
-            <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>Announcements from teachers & admins</p>
+            <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>Course updates from your instructors and school</p>
           </div>
         </div>
 
@@ -146,7 +145,7 @@ const NotificationPanel = ({ notifications, onClose, onMarkRead, onMarkAllRead }
 };
 
 // ─── Course Card ────────────────────────────────────────────────────────────
-const CourseCard = ({ course, enrolled, onEnroll, onOpenJoinSession }) => {
+const CourseCard = ({ course, enrolled, onEnroll }) => {
   const [hovered, setHovered] = useState(false);
 
   const colors = ['#4f46e5', '#7c3aed', '#0891b2', '#059669', '#d97706', '#dc2626'];
@@ -197,21 +196,7 @@ const CourseCard = ({ course, enrolled, onEnroll, onOpenJoinSession }) => {
         </div>
 
         {enrolled ? (
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <button
-              onClick={() => onOpenJoinSession(course)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '4px',
-                fontSize: '12px', fontWeight: '700', color: '#4f46e5',
-                padding: '6px 12px', borderRadius: '8px',
-                background: '#eef2ff', border: '1px solid #c7d2fe',
-                cursor: 'pointer', transition: 'all 150ms ease'
-              }}
-              title="Join a live proctored exam session"
-            >
-              <KeyRound size={12} /> Join Session
-            </button>
-            <Link
+          <Link
               to={`/courses/${course._id}`}
               style={{
                 display: 'flex', alignItems: 'center', gap: '4px',
@@ -223,7 +208,6 @@ const CourseCard = ({ course, enrolled, onEnroll, onOpenJoinSession }) => {
             >
               Details <ChevronRight size={13} />
             </Link>
-          </div>
         ) : (
           <button
             onClick={() => onEnroll(course._id)}
@@ -247,7 +231,6 @@ const CourseCard = ({ course, enrolled, onEnroll, onOpenJoinSession }) => {
 // ─── Main StudentDashboard ───────────────────────────────────────────────────
 const StudentDashboard = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [enrolledCourses, setEnrolledCourses] = useState([]);
   const [availableCourses, setAvailableCourses] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -257,10 +240,6 @@ const StudentDashboard = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [activeView, setActiveView] = useState('dashboard'); // 'dashboard' | 'available'
 
-  // Join Session Dialog State
-  const [joinModalCourse, setJoinModalCourse] = useState(null);
-  const [joinPin, setJoinPin] = useState('');
-  const [joinError, setJoinError] = useState('');
 
   const fetchDashboardData = async () => {
     try {
@@ -331,16 +310,6 @@ const StudentDashboard = () => {
     setTimeout(() => setMessage(''), 3000);
   };
 
-  const handleQuickJoinSession = (e) => {
-    e.preventDefault();
-    if (!joinPin.trim()) {
-      setJoinError('Please enter a 6-digit Session ID');
-      return;
-    }
-    // Navigate to Attend Exam or assignment coding practice with the pin
-    navigate(`/attend-exam?pin=${joinPin.trim()}&courseId=${joinModalCourse?._id || ''}`);
-  };
-
   const unreadCount = notifications.filter(n => !n.read).length;
 
   if (loading) {
@@ -367,101 +336,6 @@ const StudentDashboard = () => {
             onMarkAllRead={handleMarkAllRead}
           />
         </>
-      )}
-
-      {/* Quick Join Session Modal (No password required) */}
-      {joinModalCourse && (
-        <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(3px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
-          }}
-          onClick={(e) => { if (e.target === e.currentTarget) setJoinModalCourse(null); }}
-        >
-          <div
-            style={{
-              background: '#fff', borderRadius: '24px', width: '100%', maxWidth: '420px',
-              padding: '28px', boxShadow: '0 20px 48px rgba(0,0,0,0.16)',
-              border: '1.5px solid #e2e8f0',
-              animation: 'modalSlideUp 200ms cubic-bezier(0.16, 1, 0.3, 1)'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <KeyRound size={20} style={{ color: '#4f46e5' }} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '17px', fontWeight: '800', color: '#0f172a', margin: 0 }}>Join Live Session</h3>
-                  <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>{joinModalCourse.title}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setJoinModalCourse(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#94a3b8' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleQuickJoinSession} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {joinError && (
-                <div style={{ background: '#fef2f2', border: '1px solid #fecdd3', color: '#dc2626', padding: '10px 14px', borderRadius: '10px', fontSize: '13px', fontWeight: '600' }}>
-                  {joinError}
-                </div>
-              )}
-
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
-                  Session ID (6-digit PIN)
-                </label>
-                <input
-                  type="text"
-                  maxLength={6}
-                  placeholder="e.g. 583920"
-                  value={joinPin}
-                  onChange={e => { setJoinPin(e.target.value.replace(/\D/g, '')); setJoinError(''); }}
-                  style={{
-                    width: '100%', boxSizing: 'border-box', textAlign: 'center', fontSize: '24px',
-                    fontWeight: '800', letterSpacing: '6px', fontFamily: 'monospace',
-                    padding: '12px', borderRadius: '12px', border: '1.5px solid #cbd5e1',
-                    outline: 'none', color: '#0f172a'
-                  }}
-                  autoFocus
-                />
-                <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px' }}>
-                  Enter the 6-digit session PIN announced by your instructor. No password required.
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-                <button
-                  type="button"
-                  onClick={() => setJoinModalCourse(null)}
-                  style={{
-                    flex: 1, padding: '11px', borderRadius: '12px', border: '1.5px solid #e2e8f0',
-                    background: '#fff', color: '#475569', fontSize: '13px', fontWeight: '700',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  style={{
-                    flex: 1, padding: '11px', borderRadius: '12px', border: 'none',
-                    background: 'linear-gradient(135deg, #4f46e5, #6366f1)', color: '#fff',
-                    fontSize: '13px', fontWeight: '700', cursor: 'pointer',
-                    boxShadow: '0 4px 14px rgba(79,70,229,0.3)'
-                  }}
-                >
-                  Enter Exam Room
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
       )}
 
       <div className="space-y-7">
@@ -518,12 +392,12 @@ const StudentDashboard = () => {
               <Zap size={22} style={{ color: '#fff' }} />
             </div>
             <div>
-              <h3 style={{ fontSize: '16px', fontWeight: '800', margin: 0, color: '#fff' }}>Ready for a proctored exam?</h3>
-              <p style={{ fontSize: '13px', margin: '2px 0 0', opacity: 0.9 }}>Join a live proctored session directly using your Session PIN.</p>
+              <h3 style={{ fontSize: '16px', fontWeight: '800', margin: 0, color: '#fff' }}>Live assessments have their own space</h3>
+              <p style={{ fontSize: '13px', margin: '2px 0 0', opacity: 0.9 }}>Join teacher monitored exams from the Live assessments tab. Practice is always available inside your courses.</p>
             </div>
           </div>
-          <Link
-            to="/attend-exam"
+          {enrolledCourses[0] ? <Link
+            to="/live-assessments"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '6px',
               padding: '10px 18px', borderRadius: '12px', background: '#fff',
@@ -531,8 +405,8 @@ const StudentDashboard = () => {
               boxShadow: '0 4px 12px rgba(0,0,0,0.1)', transition: 'all 150ms'
             }}
           >
-            <KeyRound size={15} /> Attend Exam Now
-          </Link>
+            <ArrowRight size={15} /> Open live assessments
+          </Link> : <button onClick={() => setActiveView('available')} className="rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-indigo-600">Browse courses</button>}
         </div>
 
         {/* View Toggle Tabs */}
@@ -603,16 +477,7 @@ const StudentDashboard = () => {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '20px' }}>
                 {enrolledCourses.map(c => (
-                  <CourseCard
-                    key={c._id}
-                    course={c}
-                    enrolled={true}
-                    onOpenJoinSession={(course) => {
-                      setJoinModalCourse(course);
-                      setJoinPin('');
-                      setJoinError('');
-                    }}
-                  />
+                  <CourseCard key={c._id} course={c} enrolled={true} />
                 ))}
               </div>
             )}

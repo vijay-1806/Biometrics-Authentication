@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 const MAX_FREE_ENTRIES = 20;
-const VISIBLE_WINDOW = 10; // Only show 10 entries at a time in the scrollable window
+const VISIBLE_WINDOW = 5; // Only show 5 entries at a time in the scrollable window
 
 const MLTraining = () => {
   const { user } = useAuth();

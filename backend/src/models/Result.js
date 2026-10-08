@@ -16,6 +16,7 @@ const resultSchema = new mongoose.Schema(
       ref: 'Quiz',
       required: true,
     },
+    assessmentSessionId: { type: String, index: true },
     score: {
       type: Number,
       required: true,

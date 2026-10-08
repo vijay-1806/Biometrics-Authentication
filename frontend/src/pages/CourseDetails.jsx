@@ -8,15 +8,11 @@ import {
   BookOpen,
   FileCode,
   CheckCircle2,
-  Play,
   Users,
   ArrowLeft,
   Calendar,
   KeyRound,
-  Send,
   AlertCircle,
-  Zap,
-  Clock
 } from 'lucide-react';
 
 const CourseDetails = () => {
@@ -32,12 +28,6 @@ const CourseDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Session join state (No password field)
-  const [showJoinModal, setShowJoinModal] = useState(false);
-  const [targetAssignmentId, setTargetAssignmentId] = useState('');
-  const [sessionId, setSessionId] = useState('');
-  const [joinError, setJoinError] = useState('');
-
   const fetchCourseDetails = async () => {
     try {
       setLoading(true);
@@ -45,9 +35,6 @@ const CourseDetails = () => {
       setCourse(res.data.course);
       const assignList = res.data.assignments || [];
       setAssignments(assignList);
-      if (assignList.length > 0) {
-        setTargetAssignmentId(assignList[0]._id);
-      }
 
       if (user.role === 'student' && res.data.studentData) {
         setStudentSubmissions(res.data.studentData.submissions || []);
@@ -73,37 +60,6 @@ const CourseDetails = () => {
     return { completed: true, passed, bestScore, attemptsCount: subs.length };
   };
 
-  const handleJoinSubmit = (e) => {
-    e.preventDefault();
-    setJoinError('');
-    const cleanPin = sessionId.trim().replace(/\D/g, '');
-    if (cleanPin.length !== 6) {
-      setJoinError('Please enter a valid 6-digit Session ID / PIN.');
-      return;
-    }
-
-    const selectedAssId = targetAssignmentId || (assignments.length > 0 ? assignments[0]._id : '');
-    if (!selectedAssId) {
-      setJoinError('No coding assessment available in this course to join.');
-      return;
-    }
-
-    // Navigate to exam page with verified sessionPin
-    navigate(`/assignments/${selectedAssId}/coding?sessionPin=${cleanPin}`);
-  };
-
-  const openJoinModalFor = (assignmentId) => {
-    if (assignmentId) setTargetAssignmentId(assignmentId);
-    setSessionId('');
-    setJoinError('');
-    setShowJoinModal(true);
-  };
-
-  const resetJoinModal = () => {
-    setShowJoinModal(false);
-    setSessionId('');
-    setJoinError('');
-  };
 
   if (loading) {
     return (
@@ -141,6 +97,7 @@ const CourseDetails = () => {
           <ArrowLeft size={15} />
           Back to Dashboard
         </Link>
+        {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
 
         {/* Hero Banner */}
         <div className="lms-card overflow-hidden">
@@ -156,17 +113,6 @@ const CourseDetails = () => {
                 <p className="text-slate-500 mt-1.5 max-w-2xl text-sm">{course.description}</p>
               </div>
 
-              {/* Join Live Session button — students only */}
-              {user.role === 'student' && (
-                <button
-                  onClick={() => openJoinModalFor(assignments[0]?._id || '')}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-white flex-shrink-0 transition-all hover:opacity-90 active:scale-[0.98]"
-                  style={{ background: 'linear-gradient(135deg, #4f46e5, #6366f1)', boxShadow: '0 4px 14px rgba(79,70,229,0.3)' }}
-                >
-                  <KeyRound size={16} />
-                  Join Live Session
-                </button>
-              )}
             </div>
 
             <div className="flex gap-6 pt-4 mt-4 border-t border-slate-100 text-sm text-slate-500">
@@ -191,7 +137,7 @@ const CourseDetails = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileCode size={19} className="text-brand-600" />
-                <h2 className="text-lg font-bold text-slate-900">Proctored Coding Assessments</h2>
+                <h2 className="text-lg font-bold text-slate-900">Coding practice</h2>
                 {assignments.length > 0 && (
                   <span className="lms-badge badge-slate">{assignments.length}</span>
                 )}
@@ -201,7 +147,7 @@ const CourseDetails = () => {
             {assignments.length === 0 ? (
               <div className="lms-card p-10 text-center text-slate-400">
                 <FileCode size={32} className="mx-auto text-slate-200 mb-2" />
-                <p className="font-medium text-sm">No coding assessments published yet.</p>
+                <p className="font-medium text-sm">No coding practice published yet.</p>
                 <p className="text-xs mt-1">Check back later for assignments from your instructor.</p>
               </div>
             ) : (
@@ -239,7 +185,7 @@ const CourseDetails = () => {
                       <div className="flex-shrink-0">
                         {user.role === 'student' ? (
                           <button
-                            onClick={() => openJoinModalFor(assignment._id)}
+                            onClick={() => navigate(`/assignments/${assignment._id}/coding`)}
                             className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl text-white transition-all active:scale-[0.98]"
                             style={{
                               background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
@@ -248,7 +194,7 @@ const CourseDetails = () => {
                             }}
                           >
                             <KeyRound size={14} />
-                            Attend Exam
+                            Practice now
                           </button>
                         ) : (
                           <span className="text-xs text-slate-400 font-medium italic">
@@ -301,93 +247,6 @@ const CourseDetails = () => {
         </div>
       </div>
 
-      {/* Join Session Modal (No Password Required) */}
-      {showJoinModal && (
-        <div
-          className="modal-overlay"
-          onClick={(e) => { if (e.target === e.currentTarget) resetJoinModal(); }}
-        >
-          <div className="modal-box max-w-md p-7 space-y-5">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#eef2ff' }}>
-                  <KeyRound size={18} className="text-brand-600" />
-                </div>
-                <div>
-                  <h3 className="font-black text-slate-900 text-lg">Join Live Session</h3>
-                  <p className="text-xs text-slate-500">Enter your 6-digit Session ID</p>
-                </div>
-              </div>
-              <button
-                onClick={resetJoinModal}
-                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleJoinSubmit} className="space-y-4">
-              {joinError && (
-                <div className="toast-error">{joinError}</div>
-              )}
-
-              {/* Assessment picker */}
-              {assignments.length > 1 && (
-                <div>
-                  <label className="lms-label">Target Assessment</label>
-                  <select
-                    value={targetAssignmentId}
-                    onChange={e => setTargetAssignmentId(e.target.value)}
-                    className="lms-input"
-                  >
-                    {assignments.map(a => (
-                      <option key={a._id} value={a._id}>{a.title} ({a.language || 'JS'})</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div>
-                <label className="lms-label">Session ID (6-digit PIN)</label>
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={sessionId}
-                  onChange={e => { setSessionId(e.target.value.replace(/\D/g, '')); setJoinError(''); }}
-                  className="lms-input"
-                  style={{ textAlign: 'center', fontSize: '24px', letterSpacing: '6px', fontWeight: '800', fontFamily: 'monospace' }}
-                  placeholder="000000"
-                  required
-                  autoFocus
-                />
-                <p className="text-xs text-slate-400 mt-1.5">
-                  Get the 6-digit PIN from your teacher's proctor screen. No password needed.
-                </p>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={resetJoinModal}
-                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm text-slate-600 hover:bg-slate-100 transition-colors"
-                  style={{ border: '1.5px solid #e2e8f0' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98]"
-                  style={{ background: '#4f46e5' }}
-                >
-                  <Zap size={15} />
-                  Enter Exam Room
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </Layout>
   );
 };

@@ -193,14 +193,14 @@ const MyPerformance = () => {
                 Take your first proctored exam to view your score progression.
               </p>
               <Link
-                to="/attend-exam"
+                to="/live-assessments"
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: '6px',
                   padding: '9px 18px', borderRadius: '10px', background: '#4f46e5',
                   color: '#fff', fontSize: '13px', fontWeight: '700', textDecoration: 'none'
                 }}
               >
-                Attend Exam <ArrowRight size={14} />
+                View live assessments <ArrowRight size={14} />
               </Link>
             </div>
           ) : (

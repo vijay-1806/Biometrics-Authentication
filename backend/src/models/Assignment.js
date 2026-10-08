@@ -29,6 +29,8 @@ const assignmentSchema = new mongoose.Schema(
       enum: ['javascript', 'python'],
       default: 'javascript',
     },
+    durationMinutes: { type: Number, min: 1, max: 240, default: 60 },
+    isLiveAssessment: { type: Boolean, default: false },
     testCases: [
       {
         input: {

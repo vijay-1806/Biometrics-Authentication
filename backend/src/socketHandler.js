@@ -1,324 +1,397 @@
 const socketIo = require('socket.io');
-const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const User = require('./models/User');
+const Course = require('./models/Course');
+const Quiz = require('./models/Quiz');
+const Assignment = require('./models/Assignment');
+const AssessmentSession = require('./models/AssessmentSession');
 
 let io;
+let deadlineSweep;
+const sessions = new Map();
+const socketToPin = new Map();
+const joinAttempts = new Map();
 
-// In-memory session tracking
-// sessions[pin] = { assessmentSessionId, teacherSocketId, examId, status: 'waiting' | 'active', students: { socketId: { studentId, name, email } } }
-const sessions = {};
+const sessionRoom = (id) => `assessment-session:${id}`;
+const monitorRoom = (id) => `assessment-monitor:${id}`;
+const sameId = (a, b) => String(a?._id || a) === String(b?._id || b);
+const cleanStudent = (user) => ({ id: String(user._id), _id: String(user._id), name: user.name, email: user.email });
 
-// Map to easily find which pin a teacher or student belongs to
-const socketToPin = {};
+async function hydrateSession(record) {
+  const id = String(record._id);
+  let session = sessions.get(String(record.pin));
+  if (!session) {
+    session = {
+      assessmentSessionId: id,
+      sessionPin: String(record.pin),
+      teacherId: String(record.teacher),
+      teacherSocketId: null,
+      examId: String(record.assessment),
+      courseId: String(record.course),
+      status: record.status,
+      startedAt: record.startedAt,
+      endsAt: record.endsAt,
+      students: {},
+    };
+    sessions.set(String(record.pin), session);
+  } else {
+    session.status = record.status;
+    session.startedAt = record.startedAt;
+    session.endsAt = record.endsAt;
+  }
+  return session;
+}
+
+async function sessionRecord(session) {
+  return AssessmentSession.findById(session.assessmentSessionId);
+}
+
+function emitStudentList(session) {
+  if (!session.teacherSocketId || !io) return;
+  const students = Object.values(session.students).map((item) => item.student);
+  io.to(session.teacherSocketId).emit('student-joined', students);
+}
+
+async function resolveAssessment(assessmentId) {
+  let assessment = await Assignment.findById(assessmentId).select('_id course title durationMinutes isLiveAssessment');
+  if (assessment) return { assessment, courseId: String(assessment.course) };
+  assessment = await Quiz.findById(assessmentId).select('_id course title isExam durationMinutes');
+  if (assessment) return { assessment, courseId: String(assessment.course) };
+  return null;
+}
+
+async function canManage(user, courseId) {
+  if (user.role === 'admin') return true;
+  if (user.role !== 'teacher') return false;
+  const course = await Course.findById(courseId).select('teacher');
+  return Boolean(course && sameId(course.teacher, user._id));
+}
+
+async function canJoin(user, courseId) {
+  if (user.role !== 'student') return false;
+  const course = await Course.findById(courseId).select('studentsEnrolled');
+  return Boolean(course && course.studentsEnrolled.some((id) => sameId(id, user._id)));
+}
+
+function scheduleSessionDeadline(session, record) {
+  if (!session.endsAt) return;
+  const delay = Math.max(0, session.endsAt.getTime() - Date.now());
+  setTimeout(async () => {
+    try {
+      const current = await AssessmentSession.findOneAndUpdate(
+        { _id: record._id, status: 'active', endsAt: { $lte: new Date() } },
+        { $set: { status: 'ended', endReason: 'time_limit', endedAt: new Date() } },
+        { new: true },
+      );
+      if (!current) return;
+      session.status = 'ended';
+      io.to(sessionRoom(session.assessmentSessionId)).emit('session-ended', { reason: 'time_limit' });
+    } catch (error) {
+      console.error('Failed to close expired assessment session:', error.message);
+    }
+  }, delay);
+}
+
+async function createOrRestoreSession(socket, { examId, pin }) {
+  const resolved = await resolveAssessment(String(examId || ''));
+  if (!resolved || !(await canManage(socket.user, resolved.courseId))) {
+    socket.emit('session-error', 'You do not have permission to monitor this assessment.');
+    return;
+  }
+  if (resolved.assessment.isExam !== true && resolved.assessment.isLiveAssessment !== true) {
+    socket.emit('session-error', 'Only assessments marked for proctoring can open a live exam room.');
+    return;
+  }
+
+  // Reattach to the existing session for this assessment instead of creating
+  // a second room after refresh or a teacher reconnect.
+  let record = await AssessmentSession.findOne({
+    assessment: String(examId),
+    teacher: String(socket.user._id),
+    status: { $in: ['waiting', 'active'] },
+  }).sort({ createdAt: -1 });
+
+  if (!record) {
+    const cleanPin = String(pin || '').replace(/\D/g, '').slice(0, 6);
+    if (cleanPin.length !== 6) {
+      socket.emit('session-error', 'Create a session with a six-digit join code.');
+      return;
+    }
+    const existingPin = await AssessmentSession.findOne({ pin: cleanPin }).select('_id status');
+    if (existingPin) {
+      socket.emit('session-error', 'That room code has already been used. Create a new session to get a fresh code.');
+      return;
+    }
+    record = await AssessmentSession.create({
+      assessment: String(examId),
+      course: resolved.courseId,
+      teacher: String(socket.user._id),
+      pin: cleanPin,
+      status: 'waiting',
+    });
+  }
+
+  if (record.status === 'active' && record.endsAt && record.endsAt <= new Date()) {
+    record.status = 'ended';
+    record.endReason = 'time_limit';
+    record.endedAt = record.endsAt;
+    await record.save();
+  }
+
+  const session = await hydrateSession(record);
+  if (session.status === 'ended') {
+    socket.emit('session-error', 'This assessment room has ended. Create a new room to run another attempt.');
+    return;
+  }
+  session.teacherSocketId = socket.id;
+  socketToPin.set(socket.id, session.sessionPin);
+  socket.join(session.sessionPin);
+  socket.join(sessionRoom(session.assessmentSessionId));
+  socket.join(monitorRoom(session.assessmentSessionId));
+  const participants = (record.participants || []).map((participant) => ({
+    id: String(participant.student),
+    _id: String(participant.student),
+    name: 'Joined student',
+    connected: false,
+  }));
+  Object.values(session.students).forEach(({ student }) => {
+    const idx = participants.findIndex((item) => item.id === student.id);
+    if (idx >= 0) participants[idx] = { ...student, connected: true };
+    else participants.push({ ...student, connected: true });
+  });
+  socket.emit('session-created', {
+    pin: session.sessionPin,
+    assessmentSessionId: session.assessmentSessionId,
+    examId: session.examId,
+    status: session.status,
+    endsAt: session.endsAt,
+    students: participants,
+  });
+  if (session.status === 'active') scheduleSessionDeadline(session, record);
+}
+
+async function joinSession(socket, { pin }) {
+  const pinStr = String(pin || '').replace(/\D/g, '').slice(0, 6);
+  const userKey = String(socket.user._id);
+  const attempt = joinAttempts.get(userKey) || { count: 0, startedAt: Date.now() };
+  if (Date.now() - attempt.startedAt > 2 * 60 * 1000) {
+    attempt.count = 0;
+    attempt.startedAt = Date.now();
+  }
+  if (attempt.count >= 5) {
+    socket.emit('join-error', 'Too many room code attempts. Wait two minutes before trying again.');
+    return;
+  }
+  let session = sessions.get(pinStr);
+  let record = session ? await sessionRecord(session) : await AssessmentSession.findOne({ pin: pinStr });
+  if (!record || record.status === 'ended') {
+    attempt.count += 1;
+    joinAttempts.set(userKey, attempt);
+    socket.emit('join-error', 'That assessment code is invalid or the session has ended.');
+    return;
+  }
+  if (record.status === 'active' && record.endsAt && record.endsAt <= new Date()) {
+    record.status = 'ended';
+    record.endReason = 'time_limit';
+    record.endedAt = record.endsAt;
+    await record.save();
+    attempt.count += 1;
+    joinAttempts.set(userKey, attempt);
+    socket.emit('join-error', 'The time limit for this assessment has passed.');
+    return;
+  }
+  session = await hydrateSession(record);
+  if (!(await canJoin(socket.user, session.courseId))) {
+    attempt.count += 1;
+    joinAttempts.set(userKey, attempt);
+    socket.emit('join-error', 'You must be enrolled in this course to join the assessment.');
+    return;
+  }
+  joinAttempts.delete(userKey);
+
+  const student = cleanStudent(socket.user);
+  const previous = session.students[student.id];
+  if (previous?.socketId && previous.socketId !== socket.id) {
+    io.to(previous.socketId).emit('session-reconnected', 'This account reconnected in another tab.');
+    socketToPin.delete(previous.socketId);
+  }
+  session.students[student.id] = { student, socketId: socket.id };
+  socketToPin.set(socket.id, pinStr);
+  socket.join(pinStr);
+  socket.join(sessionRoom(session.assessmentSessionId));
+
+  await AssessmentSession.updateOne(
+    { _id: record._id, 'participants.student': { $ne: student.id } },
+    { $push: { participants: { student: student.id, joinedAt: new Date(), lastSeenAt: new Date() } } },
+  );
+  await AssessmentSession.updateOne(
+    { _id: record._id, 'participants.student': student.id },
+    { $set: { 'participants.$.lastSeenAt': new Date() } },
+  );
+
+  emitStudentList(session);
+  const eventData = {
+    examId: session.examId,
+    assessmentSessionId: session.assessmentSessionId,
+    pin: pinStr,
+    endsAt: session.endsAt,
+  };
+  socket.emit(session.status === 'active' ? 'exam-started' : 'join-success', eventData);
+}
 
 const initSocket = (server) => {
   io = socketIo(server, {
-    cors: {
-      origin: '*',
-      methods: ['GET', 'POST']
+    cors: { origin: process.env.FRONTEND_ORIGIN || true, methods: ['GET', 'POST'] },
+  });
+
+  if (!deadlineSweep) {
+    deadlineSweep = setInterval(async () => {
+      try {
+        const expired = await AssessmentSession.find({ status: 'active', endsAt: { $lte: new Date() } }).select('_id pin endsAt');
+        for (const record of expired) {
+          const ended = await AssessmentSession.findOneAndUpdate(
+            { _id: record._id, status: 'active', endsAt: { $lte: new Date() } },
+            { $set: { status: 'ended', endReason: 'time_limit', endedAt: record.endsAt || new Date() } },
+            { new: true },
+          );
+          if (!ended) continue;
+          const session = sessions.get(String(record.pin));
+          if (session) {
+            session.status = 'ended';
+            io.to(sessionRoom(session.assessmentSessionId)).emit('session-ended', { reason: 'time_limit' });
+          }
+        }
+      } catch (error) {
+        // Mongo may still be connecting during process startup; retry next pass.
+      }
+    }, 15000);
+  }
+
+  io.use(async (socket, next) => {
+    try {
+      const token = socket.handshake.auth?.token;
+      if (!token) return next(new Error('Authentication required'));
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecretlmskey12345');
+      const user = await User.findById(decoded.id).select('-password');
+      if (!user) return next(new Error('Account not found'));
+      if (decoded.sessionId && user.sessionId && decoded.sessionId !== user.sessionId) {
+        return next(new Error('This login session has expired'));
+      }
+      socket.user = user;
+      next();
+    } catch (error) {
+      next(new Error('Authentication failed'));
     }
   });
 
   io.on('connection', (socket) => {
-    console.log(`Socket connected: ${socket.id}`);
-
-    // Teacher creates or re-attaches to a session
-    socket.on('create-session', async ({ examId, pin }) => {
-      if (!pin) return;
-      const pinStr = String(pin).trim();
-      let session = sessions[pinStr];
-
-      if (session) {
-        // Preserving existing session state & active students across teacher page updates/re-renders
-        session.teacherSocketId = socket.id;
-        if (examId) session.examId = String(examId);
-        socketToPin[socket.id] = pinStr;
-        socket.join(pinStr);
-        if (session.assessmentSessionId) {
-          socket.join(`assessment-session:${session.assessmentSessionId}`);
-        }
-        console.log(`Teacher re-attached to session ${pinStr} (assessmentSessionId: ${session.assessmentSessionId})`);
-        
-        const uniqueStudentsMap = {};
-        Object.values(session.students || {}).forEach(s => {
-          const key = String(s._id || s.id || '');
-          if (key) uniqueStudentsMap[key] = s;
-        });
-
-        socket.emit('session-created', { 
-          pin: pinStr, 
-          assessmentSessionId: session.assessmentSessionId,
-          status: session.status,
-          students: Object.values(uniqueStudentsMap)
-        });
-        return;
-      }
-
-      // Brand new session creation
-      const assessmentSessionId = new mongoose.Types.ObjectId().toString();
-      sessions[pinStr] = {
-        assessmentSessionId,
-        sessionPin: pinStr,
-        teacherSocketId: socket.id,
-        examId: String(examId || ''),
-        status: 'waiting',
-        students: {}
-      };
-
-      socketToPin[socket.id] = pinStr;
-      socket.join(pinStr);
-      socket.join(`assessment-session:${assessmentSessionId}`);
-      console.log(`Teacher created new session ${pinStr} (assessmentSessionId: ${assessmentSessionId}) for exam ${examId}`);
-
-      try {
-        const BehaviorSession = require('./models/BehaviorSession');
-        const BehaviorAlert = require('./models/BehaviorAlert');
-        if (examId) {
-          await BehaviorSession.deleteMany({ exam: examId });
-          await BehaviorAlert.deleteMany({ exam: examId.toString() });
-          console.log(`Reset previous behavior session data for exam ${examId}`);
-        }
-      } catch (err) {
-        console.error('Error resetting previous behavior sessions:', err.message);
-      }
-
-      socket.emit('session-created', { pin: pinStr, assessmentSessionId, status: 'waiting', students: [] });
+    socket.on('create-session', async (payload = {}) => {
+      try { await createOrRestoreSession(socket, payload); }
+      catch (error) { socket.emit('session-error', 'Could not restore the assessment session. Please retry.'); }
     });
 
-    // Student joins a session
-    socket.on('join-session', ({ pin, student }) => {
-      const pinStr = String(pin || '').trim();
-      const session = sessions[pinStr];
-      if (!session || session.status === 'ended') {
-        return socket.emit('join-error', 'Invalid PIN or session has ended');
-      }
+    socket.on('join-session', async (payload = {}) => {
+      try { await joinSession(socket, payload); }
+      catch (error) { socket.emit('join-error', 'Could not join this assessment. Please retry.'); }
+    });
+    socket.on('rejoin-session', async (payload = {}) => joinSession(socket, payload));
 
-      const studentIdStr = String(student.id || student._id || '');
-
-      // Evict any previous socket connection for this student ID to prevent duplicate candidate rows
-      for (const existingSocketId in session.students) {
-        const existingStudent = session.students[existingSocketId];
-        if (String(existingStudent.id || existingStudent._id || '') === studentIdStr) {
-          delete session.students[existingSocketId];
-          delete socketToPin[existingSocketId];
-        }
-      }
-
-      // Add active student
-      session.students[socket.id] = student;
-      socketToPin[socket.id] = pinStr;
-      socket.join(pinStr);
-      if (session.assessmentSessionId) {
-        socket.join(`assessment-session:${session.assessmentSessionId}`);
-      }
-
-      console.log(`Student ${student.name} (${studentIdStr}) joined session ${pinStr}`);
-
-      // Deduplicate student objects by ID for teacher broadcast
-      const uniqueStudentsMap = {};
-      Object.values(session.students).forEach(s => {
-        const key = String(s._id || s.id || '');
-        if (key) uniqueStudentsMap[key] = s;
-      });
-      const uniqueList = Object.values(uniqueStudentsMap);
-
-      // Notify teacher
-      if (session.teacherSocketId) {
-        io.to(session.teacherSocketId).emit('student-joined', uniqueList);
-      }
-
-      // If exam already active, immediately start the student
-      if (session.status === 'active') {
-        socket.emit('exam-started', { examId: session.examId, assessmentSessionId: session.assessmentSessionId, pin: pinStr });
-      } else {
-        socket.emit('join-success', { examId: session.examId, assessmentSessionId: session.assessmentSessionId, pin: pinStr });
-      }
+    socket.on('start-exam', async ({ pin } = {}) => {
+      const session = sessions.get(String(pin || ''));
+      if (!session || session.teacherId !== String(socket.user._id) || socket.user.role === 'student') return;
+      const record = await sessionRecord(session);
+      if (!record || record.status !== 'waiting') return;
+      const resolved = await resolveAssessment(session.examId);
+      const durationMinutes = Math.min(240, Math.max(1, Number(resolved?.assessment?.durationMinutes || 60)));
+      const startedAt = new Date();
+      const endsAt = new Date(startedAt.getTime() + durationMinutes * 60 * 1000);
+      await AssessmentSession.updateOne({ _id: record._id, status: 'waiting' }, { $set: { status: 'active', startedAt, endsAt, endReason: null } });
+      session.status = 'active';
+      session.startedAt = startedAt;
+      session.endsAt = endsAt;
+      const eventData = { examId: session.examId, assessmentSessionId: session.assessmentSessionId, pin: session.sessionPin, startedAt, endsAt };
+      io.to(sessionRoom(session.assessmentSessionId)).emit('exam-started', eventData);
+      scheduleSessionDeadline(session, record);
     });
 
-    // Teacher starts the exam
-    socket.on('start-exam', async ({ pin }) => {
-      const pinStr = String(pin || '').trim();
-      const session = sessions[pinStr];
-      if (session) {
-        session.status = 'active';
-
-        try {
-          const BehaviorSession = require('./models/BehaviorSession');
-          const BehaviorAlert = require('./models/BehaviorAlert');
-          if (session.examId) {
-            await BehaviorSession.deleteMany({ exam: session.examId });
-            await BehaviorAlert.deleteMany({ exam: session.examId.toString() });
-            console.log(`Reset previous behavior session data on start-exam for ${session.examId}`);
-          }
-        } catch (err) {
-          console.error('Error resetting behavior session data on start-exam:', err.message);
-        }
-
-        io.to(pinStr).emit('exam-started', { examId: session.examId, assessmentSessionId: session.assessmentSessionId, pin: pinStr });
-        if (session.assessmentSessionId) {
-          io.to(`assessment-session:${session.assessmentSessionId}`).emit('exam-started', { examId: session.examId, assessmentSessionId: session.assessmentSessionId, pin: pinStr });
-        }
-        console.log(`Exam started for session ${pinStr}`);
-      }
+    socket.on('end-session', async ({ pin } = {}) => {
+      const session = sessions.get(String(pin || ''));
+      if (!session || session.teacherId !== String(socket.user._id) || socket.user.role === 'student') return;
+      const record = await sessionRecord(session);
+      if (!record || record.status === 'ended') return;
+      record.status = 'ended';
+      record.endReason = 'teacher_ended';
+      record.endedAt = new Date();
+      await record.save();
+      session.status = 'ended';
+      io.to(sessionRoom(session.assessmentSessionId)).emit('session-ended', { reason: 'teacher_ended' });
+      sessions.delete(session.sessionPin);
     });
 
-    // Teacher explicitly ends the exam
-    socket.on('end-session', ({ pin }) => {
-      const pinStr = String(pin || '').trim();
-      const session = sessions[pinStr];
-      if (session) {
-        session.status = 'ended';
-        io.to(pinStr).emit('session-ended');
-        if (session.assessmentSessionId) {
-          io.to(`assessment-session:${session.assessmentSessionId}`).emit('session-ended');
-        }
-        delete sessions[pinStr];
-        console.log(`Session ${pinStr} officially ENDED and removed by instructor.`);
-      }
-    });
-
-    // Clean up on disconnect
     socket.on('disconnect', () => {
-      const pin = socketToPin[socket.id];
-      if (pin && sessions[pin]) {
-        const session = sessions[pin];
-
-        if (session.teacherSocketId === socket.id) {
-          console.log(`Teacher page refresh/disconnect from session ${pin}. Preserving active session state.`);
-        } else if (session.students[socket.id]) {
-          console.log(`Student disconnected from session ${pin}`);
-          delete session.students[socket.id];
-          
-          const uniqueStudentsMap = {};
-          Object.values(session.students).forEach(s => {
-            const key = String(s._id || s.id || '');
-            uniqueStudentsMap[key] = s;
-          });
-          const uniqueList = Object.values(uniqueStudentsMap);
-
-          if (session.teacherSocketId) {
-            io.to(session.teacherSocketId).emit('student-left', uniqueList);
-          }
+      const pin = socketToPin.get(socket.id);
+      if (!pin) return;
+      const session = sessions.get(pin);
+      socketToPin.delete(socket.id);
+      if (!session) return;
+      if (session.teacherSocketId === socket.id) {
+        session.teacherSocketId = null;
+      } else {
+        for (const [studentId, item] of Object.entries(session.students)) {
+          if (item.socketId === socket.id) delete session.students[studentId];
         }
+        emitStudentList(session);
       }
-      delete socketToPin[socket.id];
     });
   });
 };
 
 const getIo = () => {
-  if (!io) {
-    throw new Error('Socket.io not initialized!');
-  }
+  if (!io) throw new Error('Socket.io not initialized!');
   return io;
 };
 
-// Helper for behaviorController to broadcast an anomaly
 const broadcastAnomaly = (examId, studentId, alertPayload, assessmentSessionId = null) => {
   if (!io) return;
-  const studentIdStr = String(studentId);
-
   if (assessmentSessionId) {
-    io.to(`assessment-session:${assessmentSessionId}`).emit('student-anomaly', {
-      studentId: studentIdStr,
-      alert: alertPayload
-    });
+    io.to(monitorRoom(assessmentSessionId)).emit('student-anomaly', { studentId: String(studentId), alert: alertPayload });
     return;
   }
-
-  // Scoped fallback lookup by student membership in active session
-  for (const pin in sessions) {
-    const session = sessions[pin];
-    const isStudentInSession = Object.values(session.students || {}).some(
-      s => String(s._id || s.id || '') === studentIdStr
-    );
-    const matchesExam = session.examId && String(session.examId) === String(examId);
-
-    if (isStudentInSession || matchesExam) {
-      if (session.assessmentSessionId) {
-        io.to(`assessment-session:${session.assessmentSessionId}`).emit('student-anomaly', {
-          studentId: studentIdStr,
-          alert: alertPayload
-        });
-      } else if (session.teacherSocketId) {
-        io.to(session.teacherSocketId).emit('student-anomaly', {
-          studentId: studentIdStr,
-          alert: alertPayload
-        });
-      }
+  for (const session of sessions.values()) {
+    if (session.status !== 'ended' && String(session.examId) === String(examId)) {
+      io.to(monitorRoom(session.assessmentSessionId)).emit('student-anomaly', { studentId: String(studentId), alert: alertPayload });
     }
   }
 };
 
-// Helper for behaviorController to broadcast a live trust-score & telemetry update
 const broadcastLiveScore = (examId, studentId, data, assessmentSessionId = null) => {
   if (!io) return;
-  const studentIdStr = String(studentId);
-
+  const payload = { studentId: String(studentId), ...data, timestamp: Date.now() };
   if (assessmentSessionId) {
-    io.to(`assessment-session:${assessmentSessionId}`).emit('live_score', {
-      studentId: studentIdStr,
-      ...data,
-      timestamp: Date.now()
-    });
+    io.to(monitorRoom(assessmentSessionId)).emit('live_score', payload);
     return;
   }
-
-  // Scoped fallback lookup by student membership or exam in active session
-  for (const pin in sessions) {
-    const session = sessions[pin];
-    const isStudentInSession = Object.values(session.students || {}).some(
-      s => String(s._id || s.id || '') === studentIdStr
-    );
-    const matchesExam = session.examId && String(session.examId) === String(examId);
-
-    if (isStudentInSession || matchesExam) {
-      if (session.assessmentSessionId) {
-        io.to(`assessment-session:${session.assessmentSessionId}`).emit('live_score', {
-          studentId: studentIdStr,
-          ...data,
-          timestamp: Date.now()
-        });
-      } else if (session.teacherSocketId) {
-        io.to(session.teacherSocketId).emit('live_score', {
-          studentId: studentIdStr,
-          ...data,
-          timestamp: Date.now()
-        });
-      }
+  for (const session of sessions.values()) {
+    if (session.status !== 'ended' && String(session.examId) === String(examId)) {
+      io.to(monitorRoom(session.assessmentSessionId)).emit('live_score', payload);
     }
   }
 };
 
-// Check if a student is registered as an active participant in an ongoing assessment session
-const isStudentAuthorizedForExam = (studentId, examId) => {
+const isStudentAuthorizedForExam = async (studentId, examId, allowFinalSubmission = false) => {
   if (!studentId || !examId) return { authorized: false, session: null };
-  const studentIdStr = String(studentId);
-  const examIdStr = String(examId);
-
-  for (const pin in sessions) {
-    const session = sessions[pin];
-    if (String(session.examId) === examIdStr) {
-      if (session.status === 'ended') {
-        return { authorized: false, session, reason: 'session_ended' };
-      }
-      if (session.status === 'waiting' || session.status === 'active') {
-        for (const socketId in session.students) {
-          const student = session.students[socketId];
-          const sId = String(student._id || student.id || student);
-          if (sId === studentIdStr) {
-            return { authorized: true, session };
-          }
-        }
-      }
-    }
+  const statuses = [{ status: 'active', endsAt: { $gt: new Date() } }];
+  if (allowFinalSubmission) {
+    statuses.push({ status: 'ended', startedAt: { $ne: null }, endReason: { $in: ['time_limit', 'teacher_ended'] }, endedAt: { $gt: new Date(Date.now() - 30 * 60 * 1000) } });
   }
-  return { authorized: false, session: null };
+  const record = await AssessmentSession.findOne({
+    assessment: String(examId),
+    $or: statuses,
+    'participants.student': String(studentId),
+  }).sort({ createdAt: -1 });
+  return record
+    ? { authorized: true, session: await hydrateSession(record), status: record.status, endReason: record.endReason, endsAt: record.endsAt }
+    : { authorized: false, session: null };
 };
 
-module.exports = {
-  initSocket,
-  getIo,
-  broadcastAnomaly,
-  broadcastLiveScore,
-  isStudentAuthorizedForExam
-};
+module.exports = { initSocket, getIo, broadcastAnomaly, broadcastLiveScore, isStudentAuthorizedForExam };

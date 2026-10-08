@@ -1,0 +1,299 @@
+[
+  {
+    "id": "notice_dd8dc89cf41dc858",
+    "title": "hi",
+    "message": "hi",
+    "audience": "organization",
+    "organization_id": "default",
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:34:27.675081+00:00"
+  },
+  {
+    "id": "notice_b9a56605c0938eca",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "organization",
+    "organization_id": "default",
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:32:24.627502+00:00"
+  },
+  {
+    "id": "notice_3dc9a64b1ce4c8cb",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "organization",
+    "organization_id": "default",
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:32:19.314402+00:00"
+  },
+  {
+    "id": "notice_0579f4fbde672e34",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "organization",
+    "organization_id": "default",
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:31:55.174741+00:00"
+  },
+  {
+    "id": "notice_e3e8fbb2385c76ff",
+    "title": "Test",
+    "message": "Test Msg",
+    "audience": "organization",
+    "organization_id": "default",
+    "created_by": "admin",
+    "created_at": "2026-10-08T07:30:33.224814+00:00"
+  },
+  {
+    "id": "notice_2e4972ba6580455c",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:10.060911+00:00"
+  },
+  {
+    "id": "notice_4468f39ace3b1ce6",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:04.809194+00:00"
+  },
+  {
+    "id": "notice_f06ec54d1317e23f",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:04.598094+00:00"
+  },
+  {
+    "id": "notice_7a0def562844e76f",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:04.420566+00:00"
+  },
+  {
+    "id": "notice_54631415cbbb2d95",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:04.275418+00:00"
+  },
+  {
+    "id": "notice_ba3d0604555095c2",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:04.119902+00:00"
+  },
+  {
+    "id": "notice_a6fc81ed1cd68688",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:03.961609+00:00"
+  },
+  {
+    "id": "notice_874c80dbe9542b60",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:03.811770+00:00"
+  },
+  {
+    "id": "notice_12ea4c5da42cc372",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:03.499843+00:00"
+  },
+  {
+    "id": "notice_b59339b2f1af32f2",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:02.965198+00:00"
+  },
+  {
+    "id": "notice_40b6e2dc16444f6e",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:02.802510+00:00"
+  },
+  {
+    "id": "notice_0e7f963e05b67c89",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:02.638340+00:00"
+  },
+  {
+    "id": "notice_d553c8739ae83a46",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:02.488711+00:00"
+  },
+  {
+    "id": "notice_8f03bb61c9bc7c9e",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:02.325418+00:00"
+  },
+  {
+    "id": "notice_b8ac25b8474cca34",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:02.164552+00:00"
+  },
+  {
+    "id": "notice_20dec39257c90a93",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:01.990140+00:00"
+  },
+  {
+    "id": "notice_ee561378221b30fa",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:01.312532+00:00"
+  },
+  {
+    "id": "notice_e3ba3253455eeb3b",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:01.084837+00:00"
+  },
+  {
+    "id": "notice_efbe3321bcfe7da3",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:00.906387+00:00"
+  },
+  {
+    "id": "notice_8c9c2ad6df08fa24",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:00.717573+00:00"
+  },
+  {
+    "id": "notice_4de9a0b5aad81933",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:00.542377+00:00"
+  },
+  {
+    "id": "notice_0fc35e018cf02f2e",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:00.368142+00:00"
+  },
+  {
+    "id": "notice_4a208bb982dbff7d",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:29:00.166261+00:00"
+  },
+  {
+    "id": "notice_f646404a2d67af51",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:28:59.561041+00:00"
+  },
+  {
+    "id": "notice_ef8f56f0abd5e44a",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:28:57.926685+00:00"
+  },
+  {
+    "id": "notice_6b0379b73ffd9d44",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "organization",
+    "organization_id": "default",
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:28:48.529445+00:00"
+  },
+  {
+    "id": "notice_24d5f39afa6d6086",
+    "title": "maintanence",
+    "message": "1 to 3 pm",
+    "audience": "organization",
+    "organization_id": "default",
+    "created_by": "Platform Super Admin",
+    "created_at": "2026-10-08T07:28:44.606860+00:00"
+  },
+  {
+    "id": "notice_5de16696b8083ce8",
+    "title": "Test",
+    "message": "Test Msg",
+    "audience": "all",
+    "organization_id": null,
+    "created_by": "admin",
+    "created_at": "2026-10-08T07:27:25.922586+00:00"
+  }
+]

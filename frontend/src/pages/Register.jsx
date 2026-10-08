@@ -33,7 +33,7 @@ const Register = () => {
   // Only student and teacher — no admin self-registration
   const roles = [
     { key: 'student', label: 'Student', icon: GraduationCap, desc: 'Access courses & assessments' },
-    { key: 'teacher', label: 'Teacher', icon: Users, desc: 'Create & manage courses' },
+    { key: 'teacher', label: 'Teacher', icon: Users, desc: 'Staff access by invitation' },
   ];
 
   const inputStyle = (field) => ({
@@ -142,14 +142,15 @@ const Register = () => {
                     <button
                       key={r.key}
                       type="button"
-                      onClick={() => setRole(r.key)}
+                      onClick={() => { if (r.key === 'student') setRole('student'); }}
+                      disabled={r.key === 'teacher'}
                       style={{
                         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
                         padding: '16px 12px', borderRadius: '16px',
                         border: selected ? '2px solid #6366f1' : '2px solid #e2e8f0',
                         background: selected ? '#eef2ff' : '#fff',
                         color: selected ? '#4338ca' : '#64748b',
-                        cursor: 'pointer', transition: 'all 200ms ease',
+                        cursor: r.key === 'teacher' ? 'not-allowed' : 'pointer', opacity: r.key === 'teacher' ? 0.62 : 1, transition: 'all 200ms ease',
                         position: 'relative'
                       }}
                     >
@@ -171,6 +172,7 @@ const Register = () => {
                   );
                 })}
               </div>
+              <p style={{ color: '#64748b', fontSize: '11px', margin: '8px 0 0' }}>Staff accounts are granted by your school administrator.</p>
             </div>
 
             {/* Submit */}

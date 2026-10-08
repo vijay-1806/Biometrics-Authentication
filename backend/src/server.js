@@ -9,6 +9,10 @@ const { initSocket } = require('./socketHandler');
 // Load environment variables
 dotenv.config();
 
+if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32)) {
+  throw new Error('Set JWT_SECRET to a unique value with at least 32 characters before starting in production.');
+}
+
 // Connect to database
 connectDB();
 

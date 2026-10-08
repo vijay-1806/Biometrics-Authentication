@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
   BookOpen,
@@ -22,7 +22,8 @@ import {
   Award,
   TrendingUp,
   ChevronDown,
-  BarChart2
+  BarChart2,
+  ClipboardList
 } from 'lucide-react';
 
 // ─── Notification Composer (Teacher → Students) ─────────────────────────────
@@ -32,19 +33,19 @@ const NotificationComposer = ({ onClose, courses }) => {
   const [type, setType] = useState('info');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [courseId, setCourseId] = useState(courses[0]?._id || '');
+  const [error, setError] = useState('');
 
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!title.trim() || !message.trim()) return;
+    if (!title.trim() || !message.trim() || !courseId) return;
     setSending(true);
     try {
-      await axios.post('/api/notifications', { title: title.trim(), message: message.trim(), type, audience: 'students' });
+      await axios.post('/api/notifications', { title: title.trim(), message: message.trim(), type, audience: 'students', course: courseId });
       setSent(true);
       setTimeout(() => { setSent(false); onClose(); }, 1500);
-    } catch {
-      // fallback: still close
-      setSent(true);
-      setTimeout(() => { setSent(false); onClose(); }, 1500);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Announcement could not be sent. Please try again.');
     } finally {
       setSending(false);
     }
@@ -67,6 +68,13 @@ const NotificationComposer = ({ onClose, courses }) => {
           </div>
         ) : (
           <form onSubmit={handleSend} className="space-y-4">
+            {error && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">{error}</p>}
+            <div>
+              <label className="lms-label">Course</label>
+              <select required value={courseId} onChange={e => setCourseId(e.target.value)} className="lms-input" disabled={!courses.length}>
+                {courses.map(course => <option key={course._id} value={course._id}>{course.title}</option>)}
+              </select>
+            </div>
             <div>
               <label className="lms-label">Notification Type</label>
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -95,7 +103,7 @@ const NotificationComposer = ({ onClose, courses }) => {
             </div>
             <div className="flex gap-3">
               <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl font-semibold text-sm text-slate-600 hover:bg-slate-100 transition-colors" style={{ border: '1.5px solid #e2e8f0' }}>Cancel</button>
-              <button type="submit" disabled={sending} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm text-white transition-all hover:opacity-90" style={{ background: '#4f46e5' }}>
+              <button type="submit" disabled={sending || !courseId} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm text-white transition-all hover:opacity-90 disabled:opacity-50" style={{ background: '#4f46e5' }}>
                 {sending ? <div className="lms-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : <Send size={15} />}
                 Send to Students
               </button>
@@ -284,6 +292,7 @@ const CourseDetailModal = ({ course, onClose }) => {
 // ─── Main Teacher Dashboard ───────────────────────────────────────────────────
 const TeacherDashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [courses, setCourses] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -305,6 +314,7 @@ const TeacherDashboard = () => {
   const [assignmentDesc, setAssignmentDesc] = useState('');
   const [starterCode, setStarterCode] = useState('// Write your solution here\nfunction solution(input) {\n  \n}');
   const [language, setLanguage] = useState('javascript');
+  const [assignmentDuration, setAssignmentDuration] = useState(60);
   const [testCases, setTestCases] = useState([{ input: '', expectedOutput: '' }]);
 
   const [message, setMessage] = useState({ text: '', type: '' });
@@ -317,22 +327,19 @@ const TeacherDashboard = () => {
       setCourses(courseRes.data);
       if (courseRes.data.length > 0) setSelectedCourseId(courseRes.data[0]._id);
 
-      const allSubs = [];
-      for (const course of courseRes.data) {
+      const courseDetails = await Promise.all(courseRes.data.map(async course => {
         try {
           const detail = await axios.get(`/api/courses/${course._id}`);
-          const { assignments } = detail.data;
-          if (assignments) {
-            for (const assignment of assignments) {
-              try {
-                const subRes = await axios.get(`/api/assignments/${assignment._id}/submissions`);
-                subRes.data.forEach(sub => allSubs.push({ ...sub, assignmentTitle: assignment.title, courseTitle: course.title }));
-              } catch (_) {}
-            }
-          }
-        } catch (_) {}
-      }
-      setSubmissions(allSubs);
+          return { course, assignments: detail.data.assignments || [] };
+        } catch { return { course, assignments: [] }; }
+      }));
+      const assignmentSubmissions = await Promise.all(courseDetails.flatMap(({ course, assignments }) => assignments.map(async assignment => {
+        try {
+          const result = await axios.get(`/api/assignments/${assignment._id}/submissions`);
+          return result.data.map(sub => ({ ...sub, assignmentTitle: assignment.title, courseTitle: course.title }));
+        } catch { return []; }
+      })));
+      setSubmissions(assignmentSubmissions.flat());
     } catch (err) {
       console.error('Teacher data fetch error:', err);
     } finally {
@@ -388,10 +395,11 @@ const TeacherDashboard = () => {
     try {
       await axios.post('/api/assignments', {
         course: selectedCourseId, title: assignmentTitle, description: assignmentDesc,
-        starterCode, language, testCases
+        starterCode, language, testCases, durationMinutes: Number(assignmentDuration)
       });
       showMsg('Assignment published!');
       setAssignmentTitle(''); setAssignmentDesc('');
+      setAssignmentDuration(60);
       setTestCases([{ input: '', expectedOutput: '' }]);
       setShowAssignmentForm(false);
       fetchTeacherData();
@@ -422,7 +430,8 @@ const TeacherDashboard = () => {
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setShowNotifComposer(true)}
-            className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
+            disabled={courses.length === 0}
+            className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
             style={{ background: '#fffbeb', color: '#92400e', border: '1.5px solid #fde68a' }}
           >
             <Bell size={16} />
@@ -446,16 +455,18 @@ const TeacherDashboard = () => {
             New Assignment
           </button>
           <button
-            onClick={() => navigate('/admin/behavior')}
-            disabled={courses.length === 0}
-            className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl text-white transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
-            style={{ background: 'linear-gradient(135deg, #4f46e5, #6366f1)', boxShadow: '0 2px 8px rgba(79,70,229,0.25)' }}
+            onClick={() => navigate('/teacher/assessments/new')}
+            className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
+            style={{ background: '#f5f3ff', color: '#6d28d9', border: '1.5px solid #ddd6fe' }}
           >
-            <Plus size={16} />
-            Create Session
+            <BookOpen size={16} />
+            Schedule Live Assessment
           </button>
+
         </div>
       </div>
+
+      {location.state?.notice && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">{location.state.notice}</div>}
 
       {/* Feedback messages */}
       {message.text && (
@@ -726,6 +737,12 @@ const TeacherDashboard = () => {
               </div>
 
               <div>
+                <label className="lms-label">Assessment time limit (minutes)</label>
+                <input type="number" min="1" max="240" required value={assignmentDuration} onChange={e => setAssignmentDuration(e.target.value)} className="lms-input" />
+                <p className="lms-help-text">The room closes at this deadline, even if the teacher disconnects.</p>
+              </div>
+
+              <div>
                 <label className="lms-label">Assignment Title</label>
                 <input type="text" required value={assignmentTitle} onChange={e => setAssignmentTitle(e.target.value)}
                   placeholder="e.g. Two Sum" className="lms-input" />
@@ -793,8 +810,9 @@ const TeacherDashboard = () => {
             </div>
             <div>
               <h3 className="font-black text-xl text-slate-900">Delete Course?</h3>
+              {error && <p role="alert" className="mt-2 rounded-lg bg-rose-50 p-2 text-xs font-medium text-rose-700">{error}</p>}
               <p className="text-slate-500 text-sm mt-1">
-                This will permanently delete the course, all assignments, and student submissions. This cannot be undone.
+                This permanently deletes the course, coding assignments, student scores, submissions, and session history. End any running assessment first. This cannot be undone.
               </p>
             </div>
             <div className="flex gap-3">

@@ -1,18 +1,19 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 import Layout from '../components/Common/Layout';
+import { useSearchParams } from 'react-router-dom';
 import {
   Shield, AlertTriangle, UserCheck, Eye, RefreshCw, Zap,
   CheckCircle2, XCircle, Clock, Monitor, Copy, Clipboard,
   ChevronRight, ChevronDown, Activity, BarChart2, BookOpen, Code2, Plus,
-  Users, CheckCheck, AlertCircle, ArrowRight, CheckCircle, FileCode
+  Users, AlertCircle, ArrowRight, CheckCircle, FileCode, Flag
 } from 'lucide-react';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const getRiskColor = (level) => {
   if (level === 'high')   return { bg: '#fff1f2', text: '#e11d48', border: '#fecdd3' };
-  if (level === 'medium') return { bg: '#fffbeb', text: '#d97706', border: '#fde68a' };
+  if (level === 'medium' || level === 'review') return { bg: '#fffbeb', text: '#d97706', border: '#fde68a' };
   if (level === 'low')    return { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' };
   return { bg: '#f8fafc', text: '#475569', border: '#e2e8f0' };
 };
@@ -62,12 +63,13 @@ const getReason = (alert) => {
   if (alert.alertType === 'paste_detected') return `Pasted ${alert.topDeviatingFeatures?.totalPastedChars || ''} chars.`;
   if (alert.alertType === 'copy_detected') return `Copied ${alert.topDeviatingFeatures?.totalCopiedChars || ''} chars.`;
   if (alert.alertType === 'device_change') return 'Device/resolution changed mid-exam.';
+  if (alert.alertType === 'teacher_flag') return alert.topDeviatingFeatures?.note || 'Teacher flagged this candidate for trust review.';
   if (alert.alertType === 'tab_switch') return `Tab switched (${alert.topDeviatingFeatures?.tabBlurCount || ''}×).`;
   return 'Anomaly detected.';
 };
 
 // ─── Student Row ──────────────────────────────────────────────────────────────
-const StudentRow = ({ student, live, alertCount, sessionActive, onInspect, onRetrain }) => {
+const StudentRow = ({ student, live, alertCount, sessionActive, onInspect, onFlag, isFlagged }) => {
   const studentId = student._id || student.id;
   const trustScore = live?.trustScore ?? (live?.smoothedScore > 0 ? live.smoothedScore : null);
   const score = trustScore !== null ? Math.round(trustScore) : null;
@@ -130,12 +132,13 @@ const StudentRow = ({ student, live, alertCount, sessionActive, onInspect, onRet
       <td>
         <div className="flex items-center gap-1.5 justify-end">
           <button
-            onClick={() => onRetrain(studentId)}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
-            style={{ border: '1px solid #c7d2fe' }}
-            title="Retrain model"
+            onClick={() => onFlag(student)}
+            disabled={isFlagged}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
+            style={{ border: '1px solid #fde68a' }}
+            title="Flag this student for trust review"
           >
-            <RefreshCw size={12} /> Retrain
+            <Flag size={12} /> {isFlagged ? 'Flagged' : 'Flag review'}
           </button>
           <button
             onClick={() => onInspect(student)}
@@ -272,20 +275,26 @@ const InspectModal = ({ student, live, alerts, onClose }) => {
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 export default function LiveProctorDashboard() {
+  const [searchParams] = useSearchParams();
+  const isDedicatedMonitor = Boolean(searchParams.get('pin'));
   const [courses, setCourses] = useState([]);
   const [assessments, setAssessments] = useState([]);
-  const [selectedCourse, setSelectedCourse] = useState('');
-  const [selectedAssessment, setSelectedAssessment] = useState('');
+  const [selectedCourse, setSelectedCourse] = useState(() => searchParams.get('courseId') || '');
+  const [selectedAssessment, setSelectedAssessment] = useState(() => searchParams.get('examId') || '');
 
-  const [sessionPin, setSessionPin] = useState(null);
+  const [sessionPin, setSessionPin] = useState(() => searchParams.get('pin') || null);
+  const [assessmentSessionId, setAssessmentSessionId] = useState(() => sessionStorage.getItem('lms_assessment_session') || null);
+  const [flaggingStudentId, setFlaggingStudentId] = useState('');
   const [sessionActive, setSessionActive] = useState(false);
   const [students, setStudents] = useState([]);
   const [liveAlerts, setLiveAlerts] = useState([]);
   const [liveScores, setLiveScores] = useState({});
   const [inspectedStudent, setInspectedStudent] = useState(null);
-  const [pendingJoins, setPendingJoins] = useState([]);
-  const [selectedJoins, setSelectedJoins] = useState(new Set()); // for selective approval
   const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false);
+  const [sessionError, setSessionError] = useState('');
+  const [sessionReady, setSessionReady] = useState(false);
+  const [sessionEndsAt, setSessionEndsAt] = useState(null);
+  const [sessionEnded, setSessionEnded] = useState(false);
 
   const socketRef = useRef(null);
   // Persist session state in sessionStorage so refresh doesn't kill it
@@ -297,7 +306,7 @@ export default function LiveProctorDashboard() {
       .catch(console.error);
 
     // Restore session if it was active
-    if (pinPersisted) {
+    if (pinPersisted && !searchParams.get('pin') && !searchParams.get('examId')) {
       setSessionPin(pinPersisted);
       setSessionActive(sessionStorage.getItem('lms_session_active') === 'true');
     }
@@ -307,7 +316,7 @@ export default function LiveProctorDashboard() {
     if (selectedCourse) {
       axios.get(`/api/courses/${selectedCourse}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
         .then(res => {
-          const courseAssignments = res.data.assignments?.map(a => ({ ...a, type: 'Assignment' })) || [];
+          const courseAssignments = res.data.assignments?.filter(a => a.isLiveAssessment).map(a => ({ ...a, type: 'Live coding assessment' })) || [];
           setAssessments(courseAssignments);
         }).catch(console.error);
     } else {
@@ -318,18 +327,46 @@ export default function LiveProctorDashboard() {
   useEffect(() => {
     if (sessionPin) {
       const socketHost = `http://${window.location.hostname}:5000`;
-      socketRef.current = io(socketHost, { transports: ['websocket'] });
+      socketRef.current = io(socketHost, { transports: ['websocket', 'polling'], auth: { token: localStorage.getItem('token') } });
       const socket = socketRef.current;
 
       socket.emit('create-session', { examId: selectedAssessment || sessionStorage.getItem('lms_session_exam'), pin: sessionPin });
 
-      socket.on('student-joined', (updatedStudents) => {
-        setStudents(dedup(updatedStudents));
+      socket.on('session-created', (info) => {
+        setSessionError('');
+        setSessionReady(true);
+        setSessionPin(info.pin);
+        setAssessmentSessionId(info.assessmentSessionId);
+        sessionStorage.setItem('lms_assessment_session', info.assessmentSessionId);
+        setSessionActive(info.status === 'active');
+        setSessionEnded(info.status === 'ended');
+        setSessionEndsAt(info.endsAt || null);
+        setStudents(dedup(info.students || []));
+        sessionStorage.setItem('lms_session_pin', info.pin);
+        sessionStorage.setItem('lms_session_active', String(info.status === 'active'));
+        if (searchParams.get('autostart') === '1' && info.status !== 'active' && info.status !== 'ended') {
+          socket.emit('start-exam', { pin: info.pin });
+        }
+      });
+      socket.on('session-error', (message) => setSessionError(message));
+      socket.on('connect_error', () => {
+        setSessionReady(false);
+        setSessionError('Secure room connection failed. Check your login and reconnect.');
+      });
+      socket.on('exam-started', (info = {}) => {
+        setSessionActive(true);
+        setSessionEndsAt(info.endsAt || null);
+        sessionStorage.setItem('lms_session_active', 'true');
+      });
+      socket.on('session-ended', () => {
+        setSessionActive(false);
+        setSessionEnded(true);
+        setSessionEndsAt(null);
+        sessionStorage.setItem('lms_session_active', 'false');
       });
 
-      socket.on('join-request', (data) => {
-        setPendingJoins(prev => [...prev.filter(p => p.studentId !== data.studentId), data]);
-        setSelectedJoins(prev => new Set([...prev, data.studentId])); // auto-select incoming
+      socket.on('student-joined', (updatedStudents) => {
+        setStudents(dedup(updatedStudents));
       });
 
       socket.on('student-left', (updatedStudents) => {
@@ -356,7 +393,8 @@ export default function LiveProctorDashboard() {
       });
 
       return () => {
-        // Don't disconnect on component re-render — only disconnect explicitly
+        socket.disconnect();
+        if (socketRef.current === socket) socketRef.current = null;
       };
     }
   }, [sessionPin]);
@@ -373,17 +411,15 @@ export default function LiveProctorDashboard() {
     sessionStorage.setItem('lms_session_exam', selectedAssessment);
     sessionStorage.setItem('lms_session_active', 'false');
     setSessionPin(pin);
-    setLiveScores({}); setLiveAlerts([]); setStudents([]); setPendingJoins([]); setSelectedJoins(new Set());
+    setSessionReady(false);
+    setSessionEndsAt(null);
+    setSessionEnded(false);
+    setLiveScores({}); setLiveAlerts([]); setStudents([]);
     setSessionActive(false);
   };
 
   const handleStartExam = () => {
-    if (socketRef.current) {
-      setLiveScores({}); setLiveAlerts([]);
-      socketRef.current.emit('start-exam', { pin: sessionPin });
-      setSessionActive(true);
-      sessionStorage.setItem('lms_session_active', 'true');
-    }
+    if (socketRef.current) socketRef.current.emit('start-exam', { pin: sessionPin });
   };
 
   const handleEndSession = () => {
@@ -391,56 +427,35 @@ export default function LiveProctorDashboard() {
       socketRef.current.emit('end-session', { pin: sessionPin });
       socketRef.current.disconnect();
     }
+    sessionStorage.removeItem('lms_assessment_session');
     sessionStorage.removeItem('lms_session_pin');
     sessionStorage.removeItem('lms_session_exam');
     sessionStorage.removeItem('lms_session_active');
     setSessionPin(null);
+    setSessionReady(false);
+    setSessionEndsAt(null);
+    setSessionEnded(false);
     setSessionActive(false);
-    setStudents([]); setLiveAlerts([]); setPendingJoins([]);
-  };
-
-  const handleApproveJoin = (studentId) => {
-    if (socketRef.current) {
-      socketRef.current.emit('approve-join', { pin: sessionPin, studentId });
-      setPendingJoins(prev => prev.filter(p => p.studentId !== studentId));
-      setSelectedJoins(prev => { const n = new Set(prev); n.delete(studentId); return n; });
+    setStudents([]); setLiveAlerts([]);
+    if (isDedicatedMonitor) {
+      window.setTimeout(() => {
+        window.close();
+        if (!window.closed) window.location.replace('/dashboard');
+      }, 150);
     }
   };
 
-  const handleDenyJoin = (studentId) => {
-    if (socketRef.current) {
-      socketRef.current.emit('deny-join', { pin: sessionPin, studentId });
-      setPendingJoins(prev => prev.filter(p => p.studentId !== studentId));
-      setSelectedJoins(prev => { const n = new Set(prev); n.delete(studentId); return n; });
-    }
-  };
-
-  const handleApproveSelected = () => {
-    selectedJoins.forEach(sid => handleApproveJoin(sid));
-  };
-
-  const handleApproveAll = () => {
-    pendingJoins.forEach(req => handleApproveJoin(req.studentId));
-  };
-
-  const toggleSelectJoin = (studentId) => {
-    setSelectedJoins(prev => {
-      const n = new Set(prev);
-      if (n.has(studentId)) n.delete(studentId);
-      else n.add(studentId);
-      return n;
-    });
-  };
-
-  const handleRetrain = async (studentId) => {
+  const handleFlagCandidate = async (student) => {
+    const studentId = String(student._id || student.id);
+    if (!assessmentSessionId) { setSessionError('Session details are still loading. Try again in a moment.'); return; }
+    if (flaggingStudentId === studentId) return;
+    setFlaggingStudentId(studentId);
     try {
-      const res = await axios.post(`/api/behavior/retrain/${studentId}`, {}, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      alert(`Retrain: ${res.data.reason || 'Model retrained successfully!'}`);
-    } catch (err) {
-      alert(`Retrain Error: ${err.response?.data?.message || err.message}`);
-    }
+      const { data } = await axios.post(`/api/behavior/assessment-history/${assessmentSessionId}/candidates/${studentId}/flag`, { note: 'Teacher flagged this candidate for trust review during the live assessment.' });
+      setLiveAlerts(current => current.some(alert => alert.alertType === 'teacher_flag' && String(alert.student?._id || alert.student?.id || alert.student) === String(studentId)) ? current : [{ ...data, student }, ...current]);
+      setLiveScores(current => ({ ...current, [studentId]: { ...current[studentId], riskLevel: 'review' } }));
+    } catch (error) { setSessionError(error.response?.data?.message || 'Could not flag this student.'); }
+    finally { setFlaggingStudentId(''); }
   };
 
   const getLiveScoreFor = (student) => liveScores[student._id] || liveScores[student.id] || null;
@@ -466,7 +481,7 @@ export default function LiveProctorDashboard() {
     }).length;
 
     return (
-      <Layout>
+      <Layout showNavigation={!isDedicatedMonitor}>
         <div className="space-y-5">
           {/* Control Bar */}
           <div className="lms-card p-5" style={{ borderRadius: '20px' }}>
@@ -489,14 +504,20 @@ export default function LiveProctorDashboard() {
                 <div style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '6px 16px', textAlign: 'center' }}>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Session PIN</p>
                   <div className="text-2xl font-black text-slate-900 tracking-widest font-mono">{sessionPin}</div>
+                  {sessionEndsAt && <p className="mt-1 text-[10px] font-semibold text-slate-500">Ends {new Date(sessionEndsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</p>}
                 </div>
 
                 {/* Actions */}
                 <div className="flex items-center gap-2">
-                  {!sessionActive ? (
+                  {sessionEnded ? (
+                    <div className="flex items-center gap-2">
+                      <span className="lms-badge badge-slate">SESSION ENDED</span>
+                      <button onClick={handleEndSession} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Back to setup</button>
+                    </div>
+                  ) : !sessionActive ? (
                     <button
                       onClick={handleStartExam}
-                      disabled={students.length === 0}
+                      disabled={students.length === 0 || !sessionReady}
                       className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-white disabled:opacity-40 transition-all hover:opacity-95 active:scale-[0.97]"
                       style={{ background: 'linear-gradient(135deg, #4f46e5, #6366f1)', boxShadow: '0 4px 14px rgba(79,70,229,0.3)' }}
                     >
@@ -523,6 +544,7 @@ export default function LiveProctorDashboard() {
               </div>
             </div>
           </div>
+          {sessionError && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{sessionError}</div>}
 
           {/* Redesigned Google Workspace 4-Metric Stats Ribbon */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
@@ -678,74 +700,6 @@ export default function LiveProctorDashboard() {
             </div>
           )}
 
-          {/* Pending Join Requests — with checkboxes for selective approval */}
-          {pendingJoins.length > 0 && (
-            <div className="lms-card p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                  <Clock size={16} className="text-amber-500" />
-                  Join Requests
-                  <span className="lms-badge badge-amber">{pendingJoins.length}</span>
-                </h3>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleApproveSelected}
-                    disabled={selectedJoins.size === 0}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-brand-600 hover:bg-brand-50 disabled:opacity-40 transition-colors"
-                    style={{ border: '1.5px solid #c7d2fe' }}
-                  >
-                    <CheckCircle size={13} /> Approve Selected ({selectedJoins.size})
-                  </button>
-                  <button
-                    onClick={handleApproveAll}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-colors"
-                    style={{ background: '#4f46e5' }}
-                  >
-                    <CheckCheck size={13} /> Approve All
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {pendingJoins.map((req, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3.5 rounded-xl"
-                    style={{ background: selectedJoins.has(req.studentId) ? '#f0f4ff' : '#fffbeb', border: `1.5px solid ${selectedJoins.has(req.studentId) ? '#c7d2fe' : '#fde68a'}` }}>
-                    {/* Checkbox */}
-                    <input
-                      type="checkbox"
-                      checked={selectedJoins.has(req.studentId)}
-                      onChange={() => toggleSelectJoin(req.studentId)}
-                      style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#4f46e5' }}
-                    />
-                    <div className="flex items-center gap-3 flex-1">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                        style={{ background: '#e0e7ff', color: '#4338ca' }}>
-                        {(req.studentName || 'S').slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm text-slate-900">{req.studentName || 'Unknown Student'}</p>
-                        <p className="text-xs text-slate-500">{req.studentEmail || ''}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleDenyJoin(req.studentId)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
-                        style={{ border: '1px solid #fecdd3' }}>
-                        <XCircle size={13} /> Deny
-                      </button>
-                      <button
-                        onClick={() => handleApproveJoin(req.studentId)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90"
-                        style={{ background: '#4f46e5' }}>
-                        <CheckCircle2 size={13} /> Approve
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Student Monitoring Table */}
           <div className="lms-card overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
@@ -790,7 +744,8 @@ export default function LiveProctorDashboard() {
                         alertCount={alertCount}
                         sessionActive={sessionActive}
                         onInspect={setInspectedStudent}
-                        onRetrain={handleRetrain}
+                        onFlag={handleFlagCandidate}
+                        isFlagged={flaggingStudentId === String(student._id || student.id) || liveAlerts.some(alert => String(alert.student?._id || alert.student?.id || alert.student) === String(student._id || student.id) && alert.alertType === 'teacher_flag')}
                       />
                     );
                   })}
@@ -834,7 +789,7 @@ export default function LiveProctorDashboard() {
             </div>
             <div>
               <h2 className="text-xl font-black text-slate-900">Create Exam Room</h2>
-              <p className="text-sm text-slate-500 mt-0.5">Students join with a PIN, and you approve each request.</p>
+              <p className="text-sm text-slate-500 mt-0.5">Authenticated students enrolled in the selected course can join with this PIN.</p>
             </div>
           </div>
 
@@ -866,7 +821,7 @@ export default function LiveProctorDashboard() {
 
             <div>
               <label className="lms-label" style={{ fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FileCode size={14} style={{ color: '#4f46e5' }} /> Select Coding Assessment
+                <FileCode size={14} style={{ color: '#4f46e5' }} /> Select assessment
               </label>
               <div style={{ position: 'relative' }}>
                 <select
@@ -885,13 +840,13 @@ export default function LiveProctorDashboard() {
                   onBlur={e => { e.target.style.borderColor = '#cbd5e1'; e.target.style.boxShadow = 'none'; }}
                 >
                   <option value="">— Choose an assessment —</option>
-                  {assessments.map(a => <option key={a._id} value={a._id}>{a.title} ({a.language || 'JS'})</option>)}
+                  {assessments.map(a => <option key={a._id} value={a._id}>{a.title} · {a.type}</option>)}
                 </select>
                 <ChevronDown size={17} style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#64748b' }} />
               </div>
               {selectedCourse && assessments.length === 0 && (
                 <p className="text-xs text-amber-600 mt-2 flex items-center gap-1.5 font-medium">
-                  <AlertTriangle size={13} /> No coding assignments published in this course yet.
+                  <AlertTriangle size={13} /> Publish an exam or coding assignment before opening a room.
                 </p>
               )}
             </div>
@@ -911,7 +866,7 @@ export default function LiveProctorDashboard() {
           <div className="space-y-2 pt-4 border-t border-slate-100">
             {[
               'Students enter the 6-digit PIN on the exam page to join your session',
-              'Each join request requires your explicit approval — you can approve all or selectively',
+              'Only authenticated students enrolled in the selected course can join',
               'Behavioral biometrics are monitored in real-time during the session',
               'Refreshing will not end your session — it is persisted automatically',
             ].map((point, i) => (

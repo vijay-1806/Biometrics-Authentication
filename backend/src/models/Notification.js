@@ -11,6 +11,7 @@ const notificationSchema = new mongoose.Schema(
     type: { type: String, enum: ['info', 'warning', 'success'], default: 'info' },
     from: { type: mongoose.Schema.Types.Mixed, ref: 'User' },
     fromName: { type: String },
+    course: { type: mongoose.Schema.Types.Mixed, ref: 'Course', default: null, index: true },
     // audience: 'students' | 'teachers' | specific userId
     audience: { type: String, default: 'students' },
     // For targeted notifications to a specific user

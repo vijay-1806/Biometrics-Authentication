@@ -1,14 +1,68 @@
 const Quiz = require('../models/Quiz');
 const Result = require('../models/Result');
 const Course = require('../models/Course');
+const AssessmentSession = require('../models/AssessmentSession');
+const BehaviorAlert = require('../models/BehaviorAlert');
+const BehaviorSession = require('../models/BehaviorSession');
 const { isStudentAuthorizedForExam } = require('../socketHandler');
+
+const canAccessQuiz = async (quiz, user) => {
+  const course = await Course.findById(quiz.course).select('teacher studentsEnrolled');
+  if (!course) return false;
+  if (user.role === 'admin') return true;
+  if (user.role === 'teacher') return String(course.teacher) === String(user._id);
+  return course.studentsEnrolled.some((studentId) => String(studentId) === String(user._id));
+};
+
+const configureLiveAssessment = async (req, res) => {
+  try {
+    const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) return res.status(404).json({ message: 'Practice quiz not found.' });
+    const course = await Course.findById(quiz.course).select('teacher');
+    if (!course || (String(course.teacher) !== String(req.user._id) && req.user.role !== 'admin')) return res.status(403).json({ message: 'You cannot change this course assessment.' });
+    quiz.isExam = Boolean(req.body.isLiveAssessment);
+    if (req.body.durationMinutes !== undefined) quiz.durationMinutes = Math.min(240, Math.max(1, Number(req.body.durationMinutes) || 30));
+    await quiz.save();
+    res.json(quiz);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Could not update the live assessment.' });
+  }
+};
+
+const deleteQuiz = async (req, res) => {
+  try {
+    const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) return res.status(404).json({ message: 'Quiz not found.' });
+    const course = await Course.findById(quiz.course).select('teacher');
+    if (!course || (String(course.teacher) !== String(req.user._id) && req.user.role !== 'admin')) {
+      return res.status(403).json({ message: 'You cannot delete a quiz from this course.' });
+    }
+    const assessmentFilter = { assessment: String(quiz._id) };
+    const runningSession = await AssessmentSession.exists({ ...assessmentFilter, status: { $in: ['waiting', 'active'] } });
+    if (runningSession) return res.status(409).json({ message: 'End the quiz session before deleting this quiz.' });
+
+    const sessionIds = await AssessmentSession.find(assessmentFilter).distinct('_id');
+    await Promise.all([
+      Result.deleteMany({ quiz: quiz._id }),
+      BehaviorAlert.deleteMany({ exam: String(quiz._id) }),
+      BehaviorSession.deleteMany({ $or: [{ exam: quiz._id }, { assessmentSessionId: { $in: sessionIds.map(String) } }] }),
+      AssessmentSession.deleteMany(assessmentFilter),
+    ]);
+    await quiz.deleteOne();
+    res.json({ message: 'Quiz and its results were deleted.' });
+  } catch (error) {
+    console.error('Quiz delete error:', error);
+    res.status(500).json({ message: 'Could not delete this quiz.' });
+  }
+};
 
 // @desc    Create a quiz
 // @route   POST /api/quizzes
 // @access  Private (Teacher or Admin)
 const createQuiz = async (req, res) => {
   try {
-    const { course, title, description, durationMinutes, questions } = req.body;
+    const { course, title, description, durationMinutes, questions, isExam } = req.body;
 
     if (!course || !title || !description || !questions || questions.length === 0) {
       return res.status(400).json({ message: 'Please provide course, title, description, and questions' });
@@ -24,12 +78,22 @@ const createQuiz = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to add quizzes to this course' });
     }
 
+    const normalizedQuestions = questions.map((question) => ({
+      questionText: String(question.questionText || '').trim(),
+      options: Array.isArray(question.options) ? question.options.map((option) => String(option).trim()) : [],
+      correctAnswerIndex: Number(question.correctAnswerIndex),
+    }));
+    if (normalizedQuestions.some((question) => !question.questionText || question.options.length < 2 || question.options.some((option) => !option) || !Number.isInteger(question.correctAnswerIndex) || question.correctAnswerIndex < 0 || question.correctAnswerIndex >= question.options.length)) {
+      return res.status(400).json({ message: 'Every question needs text, at least two options, and a valid answer key.' });
+    }
+    const safeDuration = Math.min(240, Math.max(1, Number(durationMinutes) || 30));
     const quiz = await Quiz.create({
       course,
       title,
       description,
-      durationMinutes: durationMinutes || 30,
-      questions,
+      durationMinutes: safeDuration,
+      isExam: Boolean(isExam),
+      questions: normalizedQuestions,
     });
 
     res.status(201).json(quiz);
@@ -49,15 +113,12 @@ const getQuizById = async (req, res) => {
       return res.status(404).json({ message: 'Quiz not found' });
     }
 
-    if (quiz.isExam && req.user && req.user.role === 'student') {
-      const authCheck = isStudentAuthorizedForExam(req.user._id, req.params.id);
-      if (!authCheck.authorized) {
-        return res.status(403).json({ 
-          message: 'Active assessment session required. Please join using the 6-digit PIN on the lobby screen.',
-          requiresSessionPin: true 
-        });
-      }
-    }
+    if (!(await canAccessQuiz(quiz, req.user))) return res.status(403).json({ message: 'Join this course before opening its assessment.' });
+
+    const authCheck = quiz.isExam && req.user?.role === 'student'
+      ? await isStudentAuthorizedForExam(req.user._id, req.params.id)
+      : { authorized: true };
+    const canViewQuestions = authCheck.authorized && (!quiz.isExam || authCheck.status === 'active');
 
     // Secure correct answers: strip correctAnswerIndex for student roles
     if (req.user.role === 'student') {
@@ -73,7 +134,11 @@ const getQuizById = async (req, res) => {
         title: quiz.title,
         description: quiz.description,
         durationMinutes: quiz.durationMinutes,
-        questions: sanitizedQuestions,
+        isExam: quiz.isExam,
+        questions: canViewQuestions ? sanitizedQuestions : [],
+        questionCount: quiz.questions.length,
+        requiresSessionPin: !canViewQuestions,
+        sessionEndsAt: authCheck.endsAt || null,
       });
     }
 
@@ -96,12 +161,17 @@ const submitQuiz = async (req, res) => {
       return res.status(404).json({ message: 'Quiz not found' });
     }
 
+    if (!(await canAccessQuiz(quiz, req.user))) return res.status(403).json({ message: 'Join this course before submitting its assessment.' });
+
     if (quiz.isExam && req.user && req.user.role === 'student') {
-      const authCheck = isStudentAuthorizedForExam(req.user._id, req.params.id);
-      if (!authCheck.authorized) {
+      const authCheck = await isStudentAuthorizedForExam(req.user._id, req.params.id, true);
+      if (!authCheck.authorized || !['active', 'ended'].includes(authCheck.status)) {
         return res.status(403).json({ message: 'Active assessment session required to submit quiz.' });
       }
     }
+
+    const existingAttempt = await Result.findOne({ student: req.user._id, quiz: quiz._id });
+    if (quiz.isExam && existingAttempt) return res.status(409).json({ message: 'An attempt has already been submitted for this proctored assessment.' });
 
     if (!answers || !Array.isArray(answers)) {
       return res.status(400).json({ message: 'Please provide answers array' });
@@ -128,8 +198,10 @@ const submitQuiz = async (req, res) => {
     const totalQuestions = quiz.questions.length;
     const percentage = Math.round((correctCount / totalQuestions) * 100);
 
+    const sessionAuth = quiz.isExam ? await isStudentAuthorizedForExam(req.user._id, req.params.id, true) : null;
     const result = await Result.create({
       student: req.user._id,
+      assessmentSessionId: sessionAuth?.session?.assessmentSessionId || null,
       quiz: quiz._id,
       score: correctCount,
       totalQuestions,
@@ -157,6 +229,8 @@ const getQuizResults = async (req, res) => {
       return res.status(404).json({ message: 'Quiz not found' });
     }
 
+    if (!(await canAccessQuiz(quiz, req.user))) return res.status(403).json({ message: 'Join this course before viewing assessment results.' });
+
     let results;
 
     if (req.user.role === 'student') {
@@ -181,6 +255,8 @@ const getQuizResults = async (req, res) => {
 
 module.exports = {
   createQuiz,
+  configureLiveAssessment,
+  deleteQuiz,
   getQuizById,
   submitQuiz,
   getQuizResults,

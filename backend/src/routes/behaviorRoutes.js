@@ -9,7 +9,9 @@ const {
   getPassage,
   retrainUser,
   getSessionReport,
-  getTeacherAnalytics
+  getTeacherAnalytics,
+  getAssessmentHistory,
+  flagAssessmentCandidate
 } = require('../controllers/behaviorController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const TrainingRequest = require('../models/TrainingRequest');
@@ -23,6 +25,8 @@ router.post('/score', protect, scoreWindow);
 // Candidate Report & Teacher Analytics Routes
 router.get('/report/:assessmentSessionId', protect, getSessionReport);
 router.get('/analytics/:assessmentSessionId', protect, authorize('teacher', 'admin'), getTeacherAnalytics);
+router.get('/assessment-history', protect, authorize('teacher', 'admin'), getAssessmentHistory);
+router.post('/assessment-history/:assessmentSessionId/candidates/:studentId/flag', protect, authorize('teacher', 'admin'), flagAssessmentCandidate);
 
 // Enrollment, Status & Retraining Routes
 router.post('/enroll', protect, enrollPassage);
@@ -41,8 +45,8 @@ router.patch('/alerts/:id', protect, authorize('teacher', 'admin'), updateAlert)
 // GET /api/behavior/training-requests — students see their own requests; admins see all pending
 router.get('/training-requests', protect, async (req, res) => {
   try {
-    if (req.user.role === 'admin' || req.user.role === 'teacher') {
-      const requests = await TrainingRequest.find({ status: 'pending' }).sort({ createdAt: -1 });
+    if (req.user.role === 'admin') {
+      const requests = await TrainingRequest.find({ status: 'pending' }).populate('student', 'name email').sort({ createdAt: -1 });
       return res.json(requests);
     }
     // Student sees their own requests
@@ -98,8 +102,8 @@ router.patch('/training-requests/:id', protect, authorize('admin'), async (req, 
       return res.status(400).json({ message: 'Status must be approved or rejected' });
     }
 
-    const request = await TrainingRequest.findByIdAndUpdate(
-      req.params.id,
+    const request = await TrainingRequest.findOneAndUpdate(
+      { _id: req.params.id, status: 'pending' },
       {
         status,
         adminNote: adminNote || '',

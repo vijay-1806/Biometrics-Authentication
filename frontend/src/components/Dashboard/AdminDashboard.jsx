@@ -8,7 +8,7 @@ import {
   Search,
   Filter,
   AlertTriangle,
-  FileText
+  FileText, Bell, Send, CheckCircle2, XCircle, ClipboardCheck
 } from 'lucide-react';
 
 const AdminDashboard = () => {
@@ -18,8 +18,7 @@ const AdminDashboard = () => {
     teachersCount: 0,
     adminsCount: 0,
     coursesCount: 0,
-    assignmentsCount: 0,
-    quizzesCount: 0
+    assignmentsCount: 0
   });
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
@@ -31,18 +30,25 @@ const AdminDashboard = () => {
 
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [trainingRequests, setTrainingRequests] = useState([]);
+  const [audience, setAudience] = useState('students');
+  const [noticeTitle, setNoticeTitle] = useState('');
+  const [noticeMessage, setNoticeMessage] = useState('');
+  const [sendingNotice, setSendingNotice] = useState(false);
 
   const fetchAdminData = async () => {
     try {
       setLoading(true);
-      const [statsRes, usersRes] = await Promise.all([
+      const [statsRes, usersRes, requestsRes] = await Promise.all([
         axios.get('/api/admin/stats'),
-        axios.get('/api/admin/users')
+        axios.get('/api/admin/users'),
+        axios.get('/api/behavior/training-requests')
       ]);
 
       setStats(statsRes.data);
       setUsers(usersRes.data);
       setFilteredUsers(usersRes.data);
+      setTrainingRequests(requestsRes.data || []);
     } catch (err) {
       console.error('Failed to load admin panel details', err);
       setError('Failed to fetch administrative data');
@@ -73,6 +79,26 @@ const AdminDashboard = () => {
 
     setFilteredUsers(result);
   }, [searchQuery, roleFilter, users]);
+
+  const reviewTrainingRequest = async (requestId, status) => {
+    try {
+      await axios.patch(`/api/behavior/training-requests/${requestId}`, { status });
+      setTrainingRequests(current => current.filter(request => request._id !== requestId));
+      setMessage(`Training data request ${status}.`);
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) { setError(err.response?.data?.message || 'Could not review request.'); }
+  };
+
+  const sendAnnouncement = async (event) => {
+    event.preventDefault(); setSendingNotice(true);
+    try {
+      await axios.post('/api/notifications', { title: noticeTitle.trim(), message: noticeMessage.trim(), audience, type: 'info' });
+      setNoticeTitle(''); setNoticeMessage('');
+      setMessage(`Announcement sent to ${audience === 'both' ? 'students and teachers' : audience}.`);
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) { setError(err.response?.data?.message || 'Announcement could not be sent.'); }
+    finally { setSendingNotice(false); }
+  };
 
   const handleRoleChange = async (userId, newRole) => {
     try {
@@ -186,6 +212,14 @@ const AdminDashboard = () => {
           </div>
         </div>
       </div>
+
+      <section className="grid gap-6 xl:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between"><div><h2 className="flex items-center gap-2 font-bold text-slate-900"><ClipboardCheck size={18} className="text-indigo-600"/>ML data requests</h2><p className="mt-1 text-xs text-slate-500">Review student requests for additional behavioral training records.</p></div><span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">{trainingRequests.length} pending</span></div>
+          {trainingRequests.length ? <div className="space-y-3">{trainingRequests.map(request => <article key={request._id} className="rounded-xl border border-slate-100 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-bold text-slate-800">{request.student?.name || request.studentName || 'Student'} <span className="font-normal text-slate-500">· +{request.amount} records</span></p><p className="mt-1 text-xs text-slate-500">{request.student?.email}</p><p className="mt-2 text-sm text-slate-700">{request.reason}</p></div><div className="flex gap-2"><button onClick={() => reviewTrainingRequest(request._id, 'approved')} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white"><CheckCircle2 size={14}/>Approve</button><button onClick={() => reviewTrainingRequest(request._id, 'rejected')} className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-3 py-2 text-xs font-bold text-rose-600"><XCircle size={14}/>Decline</button></div></div></article>)}</div> : <p className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500">No pending training requests.</p>}
+        </div>
+        <form onSubmit={sendAnnouncement} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="flex items-center gap-2 font-bold text-slate-900"><Bell size={18} className="text-indigo-600"/>School announcement</h2><p className="mt-1 text-xs text-slate-500">Send a single update to students, teachers, or both.</p><label className="mt-4 block text-xs font-bold text-slate-600">Audience<select value={audience} onChange={e => setAudience(e.target.value)} className="lms-input mt-1"><option value="students">Students</option><option value="teachers">Teachers</option><option value="both">Students and teachers</option></select></label><label className="mt-3 block text-xs font-bold text-slate-600">Title<input required maxLength={100} value={noticeTitle} onChange={e => setNoticeTitle(e.target.value)} className="lms-input mt-1" placeholder="Announcement title"/></label><label className="mt-3 block text-xs font-bold text-slate-600">Message<textarea required maxLength={1200} rows={3} value={noticeMessage} onChange={e => setNoticeMessage(e.target.value)} className="lms-input mt-1" placeholder="Write the update for your school"/></label><button disabled={sendingNotice} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"><Send size={15}/>{sendingNotice ? 'Sending…' : 'Send announcement'}</button></form>
+      </section>
 
       {/* User Accounts Manager */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden space-y-4 p-6">

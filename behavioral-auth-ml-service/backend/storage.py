@@ -33,6 +33,7 @@ USER_ALIASES = {
     "vijay@gmail.com": "6a9268397e77cbd6c3c3e886",
     "6a9268397e77cbd6c3c3e886": "6a9268397e77cbd6c3c3e886",
     "6a76a437f5922b18a8d0c3b0": "6a9268397e77cbd6c3c3e886",
+    "6a894155187fc15571c0aeb4": "6a9268397e77cbd6c3c3e886",
 
     # Ragavan
     "ragavan": "6ab3f447e9fa5f05ade70262",
@@ -118,6 +119,13 @@ def _resolve_canonical_id(user_id: str) -> str:
     return user_id
 
 
+SYSTEM_FILES = {
+    "api_keys", "memberships", "sessions", "tenants",
+    "tenant_metrics", "users", "password_resets", "audit_logs",
+    "risk_events", "verifications", "vijay_golden_backup"
+}
+
+
 def load_user(user_id: str, tenant_id: str = "default") -> dict:
     canonical_id = _resolve_canonical_id(user_id)
     
@@ -132,6 +140,8 @@ def load_user(user_id: str, tenant_id: str = "default") -> dict:
             candidate_paths.append(_user_file(meta["name"], tenant_id))
         if meta.get("email"):
             candidate_paths.append(_user_file(meta["email"], tenant_id))
+
+    # Strict tenant isolation: do NOT fall back across tenants
 
     found_path = None
     for p in candidate_paths:
@@ -149,14 +159,28 @@ def load_user(user_id: str, tenant_id: str = "default") -> dict:
             "recent_scores": [],        # rolling trust scores for smoothing (last N)
         }
 
-    with open(found_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        if "enroll_samples" not in data:
-            data["enroll_samples"] = []
-        if "tenant_id" not in data:
-            data["tenant_id"] = tenant_id
+    try:
+        with open(found_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        data = None
 
-    # If canonical path was missing, auto-sync it immediately
+    if not isinstance(data, dict):
+        return {
+            "user_id": user_id,
+            "tenant_id": tenant_id,
+            "enroll_samples": [],
+            "trusted_sessions": [],
+            "baseline_trained_at": None,
+            "recent_scores": [],
+        }
+
+    if "enroll_samples" not in data or not isinstance(data["enroll_samples"], list):
+        data["enroll_samples"] = []
+    if "tenant_id" not in data:
+        data["tenant_id"] = tenant_id
+
+    # If canonical path was missing in the target tenant, auto-sync it immediately
     canonical_path = _user_file(canonical_id, tenant_id)
     if not os.path.exists(canonical_path):
         try:
@@ -220,6 +244,14 @@ def load_model(user_id: str, tenant_id: str = "default"):
     if meta and meta.get("name"):
         candidate_paths.append(_model_file(meta["name"], tenant_id))
 
+    # Also fallback to default/root models if not in tenant directory
+    if tenant_id != "default":
+        candidate_paths.append(_model_file(canonical_id, "default"))
+        if canonical_id != user_id:
+            candidate_paths.append(_model_file(user_id, "default"))
+        if meta and meta.get("name"):
+            candidate_paths.append(_model_file(meta["name"], "default"))
+
     for p in candidate_paths:
         if os.path.exists(p):
             return joblib.load(p)
@@ -228,11 +260,43 @@ def load_model(user_id: str, tenant_id: str = "default"):
 
 
 def list_users(tenant_id: str = "default"):
-    users = []
-    target_dir = DATA_DIR if tenant_id == "default" else os.path.join(DATA_DIR, "tenants", tenant_id)
-    if not os.path.exists(target_dir):
-        return users
-    for fname in os.listdir(target_dir):
-        if fname.endswith(".json"):
-            users.append(fname[:-5])
-    return users
+    """Return clean list of unique user identifiers that possess biometric profiles."""
+    target_dirs = []
+    if tenant_id == "default":
+        target_dirs.append(DATA_DIR)
+    else:
+        t_dir = os.path.join(DATA_DIR, "tenants", tenant_id)
+        if os.path.exists(t_dir):
+            target_dirs.append(t_dir)
+        # Always fallback to root/default data dir so profiles are accessible
+        target_dirs.append(DATA_DIR)
+
+    seen_canonicals = set()
+    result_users = []
+
+    for t_dir in target_dirs:
+        if not os.path.exists(t_dir):
+            continue
+        for fname in os.listdir(t_dir):
+            if not fname.endswith(".json"):
+                continue
+            base = fname[:-5]
+            if base in SYSTEM_FILES:
+                continue
+            
+            fpath = os.path.join(t_dir, fname)
+            try:
+                with open(fpath, "r", encoding="utf-8") as fp:
+                    content = json.load(fp)
+                if not isinstance(content, dict) or "enroll_samples" not in content:
+                    continue
+                # Ensure it has sample data
+                cid = _resolve_canonical_id(base)
+                if cid not in seen_canonicals:
+                    seen_canonicals.add(cid)
+                    result_users.append(cid)
+            except Exception:
+                continue
+
+    return result_users
+

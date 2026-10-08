@@ -10,7 +10,7 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
   useEffect(() => {
     if (!user || !token) return;
 
-    const isExam = context === 'exam' || context === 'quiz' || Boolean(examId);
+    const isExam = context === 'exam' || context === 'quiz';
     if (!isExam) return;
 
     // Toast banner to warn students on violations during exams
@@ -55,11 +55,13 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
     // Forward telemetry & results to LMS proctoring backend so the teacher dashboard updates
     const syncWithProctor = async (payload) => {
       try {
+        const assessmentSessionId = sessionStorage.getItem(`assessment-session:${examId}`);
         await axios.post(
           '/api/behavior/score',
           {
             examId,
             studentId: user._id,
+            session: assessmentSessionId || undefined,
             events: payload.events || [],
             ...payload
           },

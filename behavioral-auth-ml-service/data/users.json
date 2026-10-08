@@ -1,0 +1,22 @@
+{
+  "usr_210a9d0620adc3e8": {
+    "id": "usr_210a9d0620adc3e8",
+    "email": "vijay@bioauth.io",
+    "name": "Vijay",
+    "company": "LMS Production",
+    "password_hash": "d346682e5e91fae4a4d2ede77ade5582fd61956ca679f45d0a0de37d399dfb0f",
+    "salt": "1bd3ebb17bf66865c9c9f314a4356cf4",
+    "role": "client",
+    "created_at": "2026-09-29T04:46:02.380797+00:00"
+  },
+  "usr_superadmin_01": {
+    "id": "usr_superadmin_01",
+    "email": "admin@bioauth.service",
+    "name": "Platform Super Admin",
+    "company": "BioAuth Internal Ops",
+    "password_hash": "d346682e5e91fae4a4d2ede77ade5582fd61956ca679f45d0a0de37d399dfb0f",
+    "salt": "1bd3ebb17bf66865c9c9f314a4356cf4",
+    "role": "admin",
+    "created_at": "2026-09-29T04:46:02.380797+00:00"
+  }
+}
