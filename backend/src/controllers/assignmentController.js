@@ -16,7 +16,7 @@ const createAssignment = async (req, res) => {
     }
 
     // Verify course exists and belongs to the teacher
-    const courseObj = await Course.findById(course);
+    const courseObj = await Course.findByRecordId(course);
     if (!courseObj) {
       return res.status(404).json({ message: 'Course not found' });
     }
@@ -26,7 +26,7 @@ const createAssignment = async (req, res) => {
     }
 
     const assignment = await Assignment.create({
-      course,
+      course: courseObj._id,
       title,
       description,
       starterCode: starterCode || '',
@@ -44,9 +44,9 @@ const createAssignment = async (req, res) => {
 
 const configureLiveAssessment = async (req, res) => {
   try {
-    const assignment = await Assignment.findById(req.params.id);
+    const assignment = await Assignment.findByRecordId(req.params.id);
     if (!assignment) return res.status(404).json({ message: 'Assignment not found' });
-    const course = await Course.findById(assignment.course).select('teacher');
+    const course = await Course.findByRecordId(assignment.course).select('teacher');
     if (!course || (String(course.teacher) !== String(req.user._id) && req.user.role !== 'admin')) return res.status(403).json({ message: 'You cannot change this course assessment.' });
     assignment.isLiveAssessment = Boolean(req.body.isLiveAssessment);
     if (req.body.durationMinutes !== undefined) assignment.durationMinutes = Math.min(240, Math.max(1, Number(req.body.durationMinutes) || 60));
@@ -63,7 +63,7 @@ const configureLiveAssessment = async (req, res) => {
 // @access  Private
 const getAssignmentById = async (req, res) => {
   try {
-    const assignment = await Assignment.findById(req.params.id);
+    const assignment = await Assignment.findByRecordId(req.params.id);
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
     }
@@ -92,7 +92,7 @@ const getAssignmentById = async (req, res) => {
 const runAssignmentCode = async (req, res) => {
   try {
     const { code, language } = req.body;
-    const assignment = await Assignment.findById(req.params.id);
+    const assignment = await Assignment.findByRecordId(req.params.id);
 
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
@@ -124,7 +124,7 @@ const runAssignmentCode = async (req, res) => {
 const submitAssignment = async (req, res) => {
   try {
     const { code, language } = req.body;
-    const assignment = await Assignment.findById(req.params.id);
+    const assignment = await Assignment.findByRecordId(req.params.id);
 
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
@@ -172,7 +172,7 @@ const submitAssignment = async (req, res) => {
 // @access  Private
 const getSubmissions = async (req, res) => {
   try {
-    const assignment = await Assignment.findById(req.params.id);
+    const assignment = await Assignment.findByRecordId(req.params.id);
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
     }

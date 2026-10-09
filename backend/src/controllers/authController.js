@@ -33,6 +33,7 @@ const registerUser = async (req, res) => {
       email,
       password,
       sessionId,
+      lastActiveAt: new Date(),
       // Public sign-up is always a learner account. Staff roles are granted
       // through an administrator managed process, never a client form field.
       role: 'student',
@@ -77,7 +78,7 @@ const loginUser = async (req, res) => {
 
     if (user && (await user.matchPassword(password))) {
       const sessionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
-      await User.findByIdAndUpdate(user._id, { sessionId });
+      await User.findByIdAndUpdate(user._id, { sessionId, lastActiveAt: new Date() });
 
       res.json({
         _id: user._id,

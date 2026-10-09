@@ -18,8 +18,11 @@ const notificationSchema = new mongoose.Schema(
     recipient: { type: mongoose.Schema.Types.Mixed, ref: 'User', default: null },
     read: { type: Boolean, default: false },
     readBy: [{ type: mongoose.Schema.Types.Mixed, ref: 'User' }],
+    dismissedBy: [{ type: mongoose.Schema.Types.Mixed, ref: 'User' }],
   },
   { timestamps: true }
 );
+
+notificationSchema.plugin(require('../utils/mixedIdLookup'));
 
 module.exports = mongoose.model('Notification', notificationSchema);

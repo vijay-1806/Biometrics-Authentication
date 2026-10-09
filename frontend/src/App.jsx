@@ -14,6 +14,8 @@ import AssessmentBuilder from './pages/AssessmentBuilder';
 import LiveAssessments from './pages/LiveAssessments';
 import AssessmentResults from './pages/AssessmentResults';
 import MLAdminDashboard from './components/Dashboard/MLAdminDashboard';
+import AdminDashboard from './components/Dashboard/AdminDashboard';
+import Layout from './components/Common/Layout';
 
 // Route protection wrapper
 const ProtectedRoute = ({ children }) => {
@@ -60,6 +62,13 @@ const StaffRoute = ({ children }) => {
   return ['teacher', 'admin'].includes(user.role) ? children : <Navigate to="/dashboard" replace />;
 };
 
+const AdminRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="flex justify-center items-center h-screen bg-slate-50"><div className="lms-spinner" /></div>;
+  if (!user) return <Navigate to="/login" replace />;
+  return user.role === 'admin' ? children : <Navigate to="/dashboard" replace />;
+};
+
 const StudentRoute = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex justify-center items-center h-screen bg-slate-50"><div className="lms-spinner" /></div>;
@@ -99,6 +108,8 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          <Route path="/admin/users" element={<AdminRoute><Layout><AdminDashboard view="users" /></Layout></AdminRoute>} />
 
           <Route path="/admin/behavior" element={<StaffRoute><LiveProctorDashboard /></StaffRoute>} />
 

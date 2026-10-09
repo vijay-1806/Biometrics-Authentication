@@ -16,17 +16,9 @@ const protect = async (req, res, next) => {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecretlmskey12345');
 
-      // Get user from the token (handles both string and ObjectId _id types seamlessly)
-      req.user = await User.findById(decoded.id).select('-password');
-      if (!req.user) {
-        req.user = await User.findOne({
-          $or: [
-            { _id: decoded.id },
-            { _id: String(decoded.id) }
-          ]
-        }).select('-password');
-      }
-      
+      // Resolve both imported ObjectId accounts and string-ID accounts.
+      req.user = await User.findByLoginId(decoded.id).select('-password');
+
       if (!req.user) {
         return res.status(401).json({ message: 'Not authorized, user not found' });
       }
@@ -39,6 +31,19 @@ const protect = async (req, res, next) => {
           message: 'Session expired. You have been logged in on another device.',
           sessionExpired: true,
         });
+      }
+
+      // Record authenticated activity at most once per minute per account.
+      const now = new Date();
+      if (!req.user.lastActiveAt || now - req.user.lastActiveAt >= 60000) {
+        try {
+          await User.updateOne({
+            _id: req.user._id,
+            $or: [{ lastActiveAt: { $lt: new Date(now - 60000) } }, { lastActiveAt: null }],
+          }, { $set: { lastActiveAt: now } }, { timestamps: false });
+        } catch (activityError) {
+          console.warn('Could not record user activity:', activityError.message);
+        }
       }
 
       next();

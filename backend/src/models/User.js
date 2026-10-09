@@ -31,6 +31,10 @@ const userSchema = new mongoose.Schema(
       enum: ['student', 'teacher', 'admin'],
       default: 'student',
     },
+    lastActiveAt: {
+      type: Date,
+      default: null,
+    },
     sessionId: {
       type: String,
       default: null,
@@ -49,6 +53,15 @@ userSchema.pre('save', async function (next) {
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
 });
+
+// Imported seed accounts use ObjectIds; newer accounts may use string IDs.
+userSchema.statics.findByLoginId = function (id) {
+  const ids = [String(id)];
+  if (/^[0-9a-fA-F]{24}$/.test(String(id))) {
+    ids.push(new mongoose.Types.ObjectId(String(id)));
+  }
+  return this.findOne({ _id: { $in: ids } });
+};
 
 // Match user entered password to hashed password in database
 userSchema.methods.matchPassword = async function (enteredPassword) {

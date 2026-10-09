@@ -40,7 +40,6 @@ export default function AssessmentBuilder() {
     event.preventDefault(); setError('');
     // Reserve the browser tab during the click so popup blockers allow the dedicated monitor.
     const monitorTab = window.open('about:blank', '_blank');
-    if (!monitorTab) { setError('Allow pop-ups for this site to open the live monitoring room. Nothing was published.'); return; }
     setSaving(true);
     try {
       let activeCourseId = courseId;
@@ -62,9 +61,11 @@ export default function AssessmentBuilder() {
       await axios.patch(`/api/assignments/${activeAssignmentId}/live`, { isLiveAssessment: true, durationMinutes: Number(duration) });
       const pin = String(Math.floor(100000 + Math.random() * 900000));
       const params = new URLSearchParams({ pin, examId: activeAssignmentId, courseId: activeCourseId, autostart: '1' });
-      monitorTab.location.replace(`/admin/behavior?${params.toString()}`);
+      const monitorUrl = `/admin/behavior?${params.toString()}`;
+      if (monitorTab) monitorTab.location.replace(monitorUrl);
+      else window.location.assign(monitorUrl);
     } catch (err) {
-      monitorTab.close();
+      monitorTab?.close();
       setError(err.response?.data?.message || err.message || 'Could not publish the live assessment.');
     } finally { setSaving(false); }
   };

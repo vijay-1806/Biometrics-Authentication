@@ -566,9 +566,9 @@ def enroll(req: EnrollRequest, ctx: dict = Depends(get_tenant_context)):
         "model_trained_this_call": trained,
         "current_phase": phase + 1,
         "current_phase_label": PHASE_LABELS[phase],
-        "next_passage": next_info["text"] if n < FULL_MIN_SAMPLES else None,
-        "next_phase": next_info["phase_number"] if n < FULL_MIN_SAMPLES else None,
-        "next_phase_label": next_info["phase_label"] if n < FULL_MIN_SAMPLES else None,
+        "next_passage": next_info["text"],
+        "next_phase": next_info["phase_number"],
+        "next_phase_label": next_info["phase_label"],
     }
 
 

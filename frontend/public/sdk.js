@@ -422,37 +422,36 @@
         });
       };
 
-      // 4. Tab switch & window blur listeners
-      // Fix: In-app clicks (like Description/Attempts tabs or Monaco editor) must NOT trigger false tab switch
-      this._boundBlur = () => {
-        if (!this._sessionActive) return;
-        // Delay verification to allow in-page focus shifts to settle
-        setTimeout(() => {
-          if (!this._sessionActive) return;
-          // If the document still has focus, or document is not hidden and active element is within page, do not trigger
-          if (document.hidden) {
-            const now = Date.now();
-            if (now - this._lastBlurTime < 1500) return;
-            this._lastBlurTime = now;
-            this._onViolationCallback({
-              type: 'tab_switch',
-              timestamp: now
-            });
-          }
-        }, 350);
+      // Confirm page departure after focus settles; internal clicks are not violations.
+      this._focusAway = false;
+      const clearPendingBlur = () => {
+        if (this._blurTimer) clearTimeout(this._blurTimer);
+        this._blurTimer = null;
       };
-
+      const recordDeparture = () => {
+        if (!this._sessionActive || this._focusAway) return;
+        this._focusAway = true;
+        this._onViolationCallback({ type: 'tab_switch', timestamp: Date.now() });
+      };
+      this._boundBlur = (event) => {
+        if (event.target !== window || !this._sessionActive) return;
+        clearPendingBlur();
+        this._blurTimer = setTimeout(() => {
+          this._blurTimer = null;
+          if (document.hidden || !document.hasFocus()) recordDeparture();
+        }, 200);
+      };
+      this._boundFocus = () => {
+        clearPendingBlur();
+        if (!document.hidden) this._focusAway = false;
+      };
       this._boundVisibilityChange = () => {
-        if (!this._sessionActive) return;
         if (document.hidden) {
-          const now = Date.now();
-          if (now - this._lastBlurTime < 1500) return;
-          this._lastBlurTime = now;
-
-          this._onViolationCallback({
-            type: 'tab_switch',
-            timestamp: now
-          });
+          clearPendingBlur();
+          recordDeparture();
+        } else if (document.hasFocus()) {
+          clearPendingBlur();
+          this._focusAway = false;
         }
       };
 
@@ -461,7 +460,8 @@
       window.addEventListener('keyup', this._boundKeyUp, { capture: true });
       window.addEventListener('paste', this._boundPaste, { capture: true });
       window.addEventListener('copy', this._boundCopy, { capture: true });
-      window.addEventListener('blur', this._boundBlur, { capture: true });
+      window.addEventListener('blur', this._boundBlur);
+      window.addEventListener('focus', this._boundFocus);
       document.addEventListener('visibilitychange', this._boundVisibilityChange);
 
       // Periodic verification flush timer
@@ -515,6 +515,8 @@
      */
     endSession() {
       this._sessionActive = false;
+      if (this._blurTimer) clearTimeout(this._blurTimer);
+      this._blurTimer = null;
       if (this._flushTimer) {
         clearInterval(this._flushTimer);
         this._flushTimer = null;
@@ -524,7 +526,8 @@
       if (this._boundKeyUp) window.removeEventListener('keyup', this._boundKeyUp, { capture: true });
       if (this._boundPaste) window.removeEventListener('paste', this._boundPaste, { capture: true });
       if (this._boundCopy) window.removeEventListener('copy', this._boundCopy, { capture: true });
-      if (this._boundBlur) window.removeEventListener('blur', this._boundBlur, { capture: true });
+      if (this._boundBlur) window.removeEventListener('blur', this._boundBlur);
+      if (this._boundFocus) window.removeEventListener('focus', this._boundFocus);
       if (this._boundVisibilityChange) document.removeEventListener('visibilitychange', this._boundVisibilityChange);
 
       this._eventsBuffer = [];

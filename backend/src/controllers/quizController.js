@@ -7,7 +7,7 @@ const BehaviorSession = require('../models/BehaviorSession');
 const { isStudentAuthorizedForExam } = require('../socketHandler');
 
 const canAccessQuiz = async (quiz, user) => {
-  const course = await Course.findById(quiz.course).select('teacher studentsEnrolled');
+  const course = await Course.findByRecordId(quiz.course).select('teacher studentsEnrolled');
   if (!course) return false;
   if (user.role === 'admin') return true;
   if (user.role === 'teacher') return String(course.teacher) === String(user._id);
@@ -18,7 +18,7 @@ const configureLiveAssessment = async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz) return res.status(404).json({ message: 'Practice quiz not found.' });
-    const course = await Course.findById(quiz.course).select('teacher');
+    const course = await Course.findByRecordId(quiz.course).select('teacher');
     if (!course || (String(course.teacher) !== String(req.user._id) && req.user.role !== 'admin')) return res.status(403).json({ message: 'You cannot change this course assessment.' });
     quiz.isExam = Boolean(req.body.isLiveAssessment);
     if (req.body.durationMinutes !== undefined) quiz.durationMinutes = Math.min(240, Math.max(1, Number(req.body.durationMinutes) || 30));
@@ -34,7 +34,7 @@ const deleteQuiz = async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz) return res.status(404).json({ message: 'Quiz not found.' });
-    const course = await Course.findById(quiz.course).select('teacher');
+    const course = await Course.findByRecordId(quiz.course).select('teacher');
     if (!course || (String(course.teacher) !== String(req.user._id) && req.user.role !== 'admin')) {
       return res.status(403).json({ message: 'You cannot delete a quiz from this course.' });
     }
@@ -69,7 +69,7 @@ const createQuiz = async (req, res) => {
     }
 
     // Verify course exists and belongs to the teacher
-    const courseObj = await Course.findById(course);
+    const courseObj = await Course.findByRecordId(course);
     if (!courseObj) {
       return res.status(404).json({ message: 'Course not found' });
     }

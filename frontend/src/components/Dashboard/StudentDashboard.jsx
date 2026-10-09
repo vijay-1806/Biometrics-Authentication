@@ -10,6 +10,7 @@ import {
   Users,
   Bell,
   BellOff,
+  Trash2,
   X,
   CheckCircle,
   Info,
@@ -20,7 +21,7 @@ import {
 } from 'lucide-react';
 
 // ─── Notification Panel ────────────────────────────────────────────────────
-const NotificationPanel = ({ notifications, onClose, onMarkRead, onMarkAllRead }) => {
+const NotificationPanel = ({ notifications, onClose, onMarkRead, onMarkAllRead, onDelete, deletingId, notificationError }) => {
   const unread = notifications.filter(n => !n.read);
 
   return (
@@ -75,6 +76,7 @@ const NotificationPanel = ({ notifications, onClose, onMarkRead, onMarkAllRead }
         </div>
       </div>
 
+      {notificationError && <p role="alert" className="mx-4 mt-3 rounded-lg bg-rose-50 p-3 text-xs text-rose-700">{notificationError}</p>}
       {/* List */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
         {notifications.length === 0 ? (
@@ -132,6 +134,14 @@ const NotificationPanel = ({ notifications, onClose, onMarkRead, onMarkAllRead }
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '8px', color: '#94a3b8', fontSize: '11px' }}>
                       <Clock size={11} />
                       <span>{n.fromName || 'Teacher'} · {new Date(n.createdAt || Date.now()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                      {n.read && <button
+                        type="button"
+                        aria-label={`Delete notification: ${n.title}`}
+                        title="Delete notification"
+                        disabled={deletingId === notifId}
+                        onClick={event => { event.stopPropagation(); onDelete(notifId); }}
+                        className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                      ><Trash2 size={13} />{deletingId === notifId ? 'Deleting...' : 'Delete'}</button>}
                     </div>
                   </div>
                 </div>
@@ -234,6 +244,8 @@ const StudentDashboard = () => {
   const [enrolledCourses, setEnrolledCourses] = useState([]);
   const [availableCourses, setAvailableCourses] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [deletingId, setDeletingId] = useState(null);
+  const [notificationError, setNotificationError] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState('success');
@@ -282,27 +294,35 @@ const StudentDashboard = () => {
   };
 
   const handleMarkRead = async (notifId) => {
-    // 1. Immediately update UI state so badge drops
-    setNotifications(prev => prev.map((n, i) =>
-      (n._id === notifId || i === notifId) ? { ...n, read: true } : n
-    ));
-    // 2. Persist to backend
+    if (notifications.find(n => n._id === notifId)?.read) return;
+    setNotificationError('');
     try {
-      if (notifId && typeof notifId === 'string' && notifId.length > 5) {
-        await axios.patch(`/api/notifications/${notifId}/read`);
-      }
+      await axios.patch(`/api/notifications/${notifId}/read`);
+      setNotifications(prev => prev.map(n => n._id === notifId ? { ...n, read: true } : n));
     } catch (err) {
-      console.error('Failed to mark read on server:', err);
+      setNotificationError(err.response?.data?.message || 'Could not mark notification as read.');
     }
   };
 
   const handleMarkAllRead = async () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    setNotificationError('');
     try {
       await axios.patch('/api/notifications/read-all');
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     } catch (err) {
-      console.error('Failed to mark all notifications read:', err);
+      setNotificationError(err.response?.data?.message || 'Could not mark notifications as read.');
     }
+  };
+
+  const handleDeleteNotification = async (notifId) => {
+    setDeletingId(notifId);
+    setNotificationError('');
+    try {
+      await axios.delete(`/api/notifications/${notifId}`);
+      setNotifications(prev => prev.filter(n => n._id !== notifId));
+    } catch (err) {
+      setNotificationError(err.response?.data?.message || 'Could not delete notification.');
+    } finally { setDeletingId(null); }
   };
 
   const showMsg = (text, type) => {
@@ -334,6 +354,9 @@ const StudentDashboard = () => {
             onClose={() => setShowNotifications(false)}
             onMarkRead={handleMarkRead}
             onMarkAllRead={handleMarkAllRead}
+            onDelete={handleDeleteNotification}
+            deletingId={deletingId}
+            notificationError={notificationError}
           />
         </>
       )}
@@ -380,34 +403,18 @@ const StudentDashboard = () => {
           </button>
         </div>
 
-        {/* Live Exam Fast Action Banner */}
-        <div style={{
-          background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
-          borderRadius: '20px', padding: '20px 24px', color: '#fff',
-          display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px',
-          boxShadow: '0 8px 24px rgba(79,70,229,0.22)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ width: '46px', height: '46px', borderRadius: '14px', background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Zap size={22} style={{ color: '#fff' }} />
-            </div>
+        <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-500 px-6 py-5 text-white shadow-lg shadow-indigo-200/50">
+          <div className="flex items-center gap-4">
+            <div className="rounded-xl bg-white/15 p-3"><Zap size={23} /></div>
             <div>
-              <h3 style={{ fontSize: '16px', fontWeight: '800', margin: 0, color: '#fff' }}>Live assessments have their own space</h3>
-              <p style={{ fontSize: '13px', margin: '2px 0 0', opacity: 0.9 }}>Join teacher monitored exams from the Live assessments tab. Practice is always available inside your courses.</p>
+              <h2 className="font-extrabold">Live assessments have their own space</h2>
+              <p className="mt-1 text-sm text-indigo-100">Join monitored exams from the Live assessments tab. Practice is available inside your courses.</p>
             </div>
           </div>
-          {enrolledCourses[0] ? <Link
-            to="/live-assessments"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: '6px',
-              padding: '10px 18px', borderRadius: '12px', background: '#fff',
-              color: '#4f46e5', fontWeight: '800', fontSize: '13px', textDecoration: 'none',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)', transition: 'all 150ms'
-            }}
-          >
-            <ArrowRight size={15} /> Open live assessments
-          </Link> : <button onClick={() => setActiveView('available')} className="rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-indigo-600">Browse courses</button>}
-        </div>
+          <Link to="/live-assessments" className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-indigo-600 shadow-sm hover:bg-indigo-50">
+            <ArrowRight size={16} />Open live assessments
+          </Link>
+        </section>
 
         {/* View Toggle Tabs */}
         <div style={{ display: 'flex', gap: '4px', background: '#f1f5f9', borderRadius: '14px', padding: '4px', width: 'fit-content' }}>

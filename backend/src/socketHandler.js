@@ -53,7 +53,7 @@ function emitStudentList(session) {
 }
 
 async function resolveAssessment(assessmentId) {
-  let assessment = await Assignment.findById(assessmentId).select('_id course title durationMinutes isLiveAssessment');
+  let assessment = await Assignment.findByRecordId(assessmentId).select('_id course title durationMinutes isLiveAssessment');
   if (assessment) return { assessment, courseId: String(assessment.course) };
   assessment = await Quiz.findById(assessmentId).select('_id course title isExam durationMinutes');
   if (assessment) return { assessment, courseId: String(assessment.course) };
@@ -63,13 +63,13 @@ async function resolveAssessment(assessmentId) {
 async function canManage(user, courseId) {
   if (user.role === 'admin') return true;
   if (user.role !== 'teacher') return false;
-  const course = await Course.findById(courseId).select('teacher');
+  const course = await Course.findByRecordId(courseId).select('teacher');
   return Boolean(course && sameId(course.teacher, user._id));
 }
 
 async function canJoin(user, courseId) {
   if (user.role !== 'student') return false;
-  const course = await Course.findById(courseId).select('studentsEnrolled');
+  const course = await Course.findByRecordId(courseId).select('studentsEnrolled');
   return Boolean(course && course.studentsEnrolled.some((id) => sameId(id, user._id)));
 }
 
@@ -272,7 +272,7 @@ const initSocket = (server) => {
       const token = socket.handshake.auth?.token;
       if (!token) return next(new Error('Authentication required'));
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecretlmskey12345');
-      const user = await User.findById(decoded.id).select('-password');
+      const user = await User.findByLoginId(decoded.id).select('-password');
       if (!user) return next(new Error('Account not found'));
       if (decoded.sessionId && user.sessionId && decoded.sessionId !== user.sessionId) {
         return next(new Error('This login session has expired'));

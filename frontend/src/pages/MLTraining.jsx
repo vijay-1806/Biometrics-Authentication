@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Layout from '../components/Common/Layout';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
+import { openBiometricCalibrationModal } from '../services/bioAuth';
 import {
   Brain, Plus, Trash2, CheckCircle, Clock, AlertCircle,
   Lock, FileText, Info, Send, Upload, ChevronDown
@@ -20,6 +21,7 @@ const MLTraining = () => {
   const [requestReason, setRequestReason] = useState('');
   const [requestAmount, setRequestAmount] = useState(5);
   const [reqLoading, setReqLoading] = useState(false);
+  const [training, setTraining] = useState(false);
   const [msg, setMsg] = useState({ text: '', type: '' });
   const entriesRef = useRef(null);
 
@@ -27,9 +29,9 @@ const MLTraining = () => {
     fetchData();
   }, [user]);
 
-  const fetchData = async () => {
+  const fetchData = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       try {
         const res = await axios.get(`/api/behavior/status/${user._id}`);
         setBioStatus(res.data);
@@ -56,12 +58,61 @@ const MLTraining = () => {
     }
   };
 
+  useEffect(() => {
+    if (!user || training) return;
+    const refresh = () => fetchData(false);
+    const interval = setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    return () => { clearInterval(interval); window.removeEventListener('focus', refresh); };
+  }, [user, training]);
+
   const samplesCollected = bioStatus?.samples_collected || entries.length;
   const approvedExtra = pendingRequests.filter(r => r.status === 'approved').reduce((s, r) => s + (r.amount || 0), 0);
   const effectiveLimit = MAX_FREE_ENTRIES + approvedExtra;
   const atLimit = samplesCollected >= effectiveLimit;
+  const needsRetraining = samplesCollected >= MAX_FREE_ENTRIES && (bioStatus?.baseline_trained_at || 0) < samplesCollected;
   const hasPending = pendingRequests.some(r => r.status === 'pending');
   const overLimit = samplesCollected >= MAX_FREE_ENTRIES && approvedExtra === 0;
+
+  const handleStartTraining = async () => {
+    setTraining(true);
+    setMsg({ text: '', type: '' });
+    try {
+      // Recheck approval and progress so the modal uses the current allowance.
+      const [requests, status] = await Promise.all([
+        axios.get('/api/behavior/training-requests'),
+        axios.get(`/api/behavior/status/${user._id}`),
+      ]);
+      const extra = requests.data.filter(r => r.status === 'approved').reduce((sum, r) => sum + Number(r.amount || 0), 0);
+      const target = MAX_FREE_ENTRIES + extra;
+      if (status.data.samples_collected >= target) {
+        if ((status.data.baseline_trained_at || 0) < status.data.samples_collected) {
+          await axios.post('/api/behavior/retrain');
+          setMsg({ text: 'Your model has been updated with the collected entries.', type: 'success' });
+        } else {
+          setMsg({ text: 'All available training entries have been collected.', type: 'success' });
+        }
+        setTraining(false);
+        await fetchData(false);
+        return;
+      }
+      await openBiometricCalibrationModal(user._id, {
+        targetSamples: target,
+        onComplete: async () => {
+          try {
+            await axios.post('/api/behavior/retrain');
+            setMsg({ text: 'Training complete. Your model includes the new entries.', type: 'success' });
+          } catch (err) {
+            setMsg({ text: 'Entries saved, but model training failed. Please try again later.', type: 'error' });
+          } finally { setTraining(false); await fetchData(false); }
+        },
+        onCancel: async () => { setTraining(false); await fetchData(false); },
+      });
+    } catch (err) {
+      setTraining(false);
+      setMsg({ text: err.response?.data?.message || err.message || 'Could not start training.', type: 'error' });
+    }
+  };
 
   const handleSubmitRequest = async (e) => {
     e.preventDefault();
@@ -114,9 +165,6 @@ const MLTraining = () => {
             <Brain size={24} className="text-brand-600" />
             ML Training Data
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Your behavioral biometrics training data used to build your identity model.
-          </p>
         </div>
 
         {msg.text && (
@@ -170,6 +218,16 @@ const MLTraining = () => {
               <span className="text-amber-600 font-semibold">10 → Provisional</span>
               <span className="text-green-600 font-semibold">{effectiveLimit} → Full</span>
             </div>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+            <span className="text-sm font-medium text-slate-600">
+              {approvedExtra > 0 ? `${approvedExtra} additional entries approved` : `${MAX_FREE_ENTRIES} entries available`}
+              {' � '}{Math.max(0, effectiveLimit - samplesCollected)} remaining
+            </span>
+            <button type="button" onClick={handleStartTraining} disabled={training || (atLimit && !needsRetraining)}
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
+              <Brain size={16} />{training ? 'Training...' : atLimit ? (needsRetraining ? 'Update Model' : 'Collection complete') : 'Start Training'}
+            </button>
           </div>
         </div>
 

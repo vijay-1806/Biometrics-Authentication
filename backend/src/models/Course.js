@@ -32,4 +32,6 @@ const courseSchema = new mongoose.Schema(
   }
 );
 
+courseSchema.plugin(require('../utils/mixedIdLookup'));
+
 module.exports = mongoose.model('Course', courseSchema);

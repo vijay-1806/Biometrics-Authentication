@@ -714,7 +714,7 @@ const CodingPractice = () => {
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
           boxShadow: '0 2px 10px rgba(0,0,0,0.02)', flexShrink: 0
         }}>
-          {/* Right Panel Tabs (Prevents false tab switch with e.preventDefault) */}
+          {/* Right Panel Tabs */}
           <div style={{
             display: 'flex', borderBottom: '1px solid #f1f5f9', background: '#fafbfc',
             padding: '4px 6px', gap: '4px'
@@ -813,8 +813,8 @@ const CodingPractice = () => {
             {/* 2. Console Logs View */}
             {activeRightTab === 'console' && (
               <div style={{
-                background: '#0f172a', borderRadius: '12px', padding: '14px',
-                color: '#e2e8f0', fontFamily: 'monospace', fontSize: '12px',
+                background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px',
+                color: '#1e293b', fontFamily: 'monospace', fontSize: '12px',
                 minHeight: '260px', whiteSpace: 'pre-wrap', lineHeight: '1.6'
               }}>
                 {consoleOutput}

@@ -6,7 +6,7 @@ import {
   TrendingUp,
   User,
   LogOut,
-  ShieldAlert,
+  Users,
   ChevronRight,
   ClipboardList,
   ShieldCheck,
@@ -37,8 +37,7 @@ const Sidebar = ({ mobileOpen = false, onNavigate = () => {} }) => {
 
     const adminLinks = [
       { path: '/dashboard', name: 'System overview', icon: LayoutDashboard },
-      { path: '/admin/behavior', name: 'Live monitoring', icon: ShieldAlert },
-      { path: '/teacher/results', name: 'Assessment results', icon: BarChart3 },
+      { path: '/admin/users', name: 'User management', icon: Users },
       { path: '/profile', name: 'Account settings', icon: User },
     ];
 

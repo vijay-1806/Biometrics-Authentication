@@ -49,4 +49,6 @@ const assignmentSchema = new mongoose.Schema(
   }
 );
 
+assignmentSchema.plugin(require('../utils/mixedIdLookup'));
+
 module.exports = mongoose.model('Assignment', assignmentSchema);

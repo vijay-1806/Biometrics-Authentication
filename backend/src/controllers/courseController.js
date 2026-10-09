@@ -1,3 +1,4 @@
+const idVariants = require('../utils/idVariants');
 const Course = require('../models/Course');
 const Assignment = require('../models/Assignment');
 const Quiz = require('../models/Quiz');
@@ -42,7 +43,7 @@ const getCourses = async (req, res) => {
 // @access  Private
 const getCourseById = async (req, res) => {
   try {
-    const course = await Course.findById(req.params.id)
+    const course = await Course.findByRecordId(req.params.id)
       .populate('teacher', 'name email')
       .populate('studentsEnrolled', 'name email');
 
@@ -86,15 +87,15 @@ const getCourseById = async (req, res) => {
 
 const getStudentLiveAssessments = async (req, res) => {
   try {
-    const courses = await Course.find({ studentsEnrolled: req.user._id }).select('_id title').lean();
-    const courseIds = courses.map(course => course._id);
+    const courses = await Course.find({ studentsEnrolled: { $in: idVariants(req.user._id) } }).select('_id title').lean();
+    const courseIds = courses.flatMap(course => idVariants(course._id));
     const now = new Date();
     const openSessions = await AssessmentSession.find({
       course: { $in: courseIds },
       status: { $in: ['waiting', 'active'] },
       $or: [{ status: 'waiting' }, { endsAt: null }, { endsAt: { $gt: now } }],
     }).sort({ createdAt: -1 }).lean();
-    const assignmentIds = [...new Set(openSessions.map(session => String(session.assessment)))];
+    const assignmentIds = [...new Set(openSessions.map(session => String(session.assessment)))].flatMap(idVariants);
     const assignments = await Assignment.find({
       _id: { $in: assignmentIds },
       course: { $in: courseIds },
@@ -118,6 +119,27 @@ const getStudentLiveAssessments = async (req, res) => {
   }
 };
 
+const resolveStudentSession = async (req, res) => {
+  try {
+    const pin = String(req.body.pin || '').trim();
+    if (!/^\d{6}$/.test(pin)) return res.status(400).json({ message: 'Enter a six-digit Session ID / PIN.' });
+    const session = await AssessmentSession.findOne({ pin, status: { $in: ['waiting', 'active'] }, $or: [{ status: 'waiting' }, { endsAt: null }, { endsAt: { $gt: new Date() } }] });
+    if (!session) return res.status(404).json({ message: 'Session not found or already ended. Check the code with your teacher.' });
+    const course = await Course.findByRecordId(session.course);
+    if (!course || !course.studentsEnrolled.some(id => String(id) === String(req.user._id))) {
+      return res.status(403).json({ message: 'Enroll in this course before joining its live session.' });
+    }
+    const assignment = await Assignment.findByRecordId(session.assessment);
+    if (!assignment || !assignment.isLiveAssessment || String(assignment.course) !== String(course._id)) {
+      return res.status(404).json({ message: 'The live assignment is unavailable.' });
+    }
+    res.json({ assignmentId: String(assignment._id) });
+  } catch (error) {
+    console.error('Session lookup failed:', error);
+    res.status(500).json({ message: 'Could not join the session. Try again.' });
+  }
+};
+
 // @desc    Create a course
 // @route   POST /api/courses
 // @access  Private (Teacher or Admin)
@@ -136,7 +158,7 @@ const createCourse = async (req, res) => {
       studentsEnrolled: [],
     });
 
-    const populatedCourse = await Course.findById(course._id).populate('teacher', 'name email');
+    const populatedCourse = await Course.findByRecordId(course._id).populate('teacher', 'name email');
 
     res.status(201).json(populatedCourse);
   } catch (error) {
@@ -150,7 +172,7 @@ const createCourse = async (req, res) => {
 // @access  Private (Student only)
 const enrollInCourse = async (req, res) => {
   try {
-    const course = await Course.findById(req.params.id);
+    const course = await Course.findByRecordId(req.params.id);
 
     if (!course) {
       return res.status(404).json({ message: 'Course not found' });
@@ -180,7 +202,7 @@ const enrollInCourse = async (req, res) => {
 // @access  Private (Teacher or Admin)
 const deleteCourse = async (req, res) => {
   try {
-    const course = await Course.findById(req.params.id);
+    const course = await Course.findByRecordId(req.params.id);
 
     if (!course) {
       return res.status(404).json({ message: 'Course not found' });
@@ -229,6 +251,7 @@ const deleteCourse = async (req, res) => {
 module.exports = {
   getCourses,
   getStudentLiveAssessments,
+  resolveStudentSession,
   getCourseById,
   createCourse,
   enrollInCourse,

@@ -835,10 +835,10 @@ const getAssessmentHistory = async (req, res) => {
     }
     const sessions = await AssessmentSession.find(filter).sort({ createdAt: -1 }).limit(100).lean();
     const rows = await Promise.all(sessions.map(async (session) => {
-      const course = await Course.findById(session.course).select('title').lean();
+      const course = await Course.findByRecordId(session.course).select('title').lean();
       let assessment = await Quiz.findById(session.assessment).select('title isExam').lean();
       let kind = 'quiz';
-      if (!assessment) { assessment = await Assignment.findById(session.assessment).select('title').lean(); kind = 'assignment'; }
+      if (!assessment) { assessment = await Assignment.findByRecordId(session.assessment).select('title').lean(); kind = 'assignment'; }
       const [users, behaviors, results, submissions, alerts] = await Promise.all([
         User.find({ _id: { $in: (session.participants || []).map(p => p.student) } }).select('name email').lean(),
         BehaviorSession.find({ assessmentSessionId: String(session._id) }).lean(),
@@ -870,7 +870,7 @@ const flagAssessmentCandidate = async (req, res) => {
     const session = await AssessmentSession.findById(assessmentSessionId);
     if (!session) return res.status(404).json({ message: 'Assessment session not found.' });
     if (req.user.role === 'teacher') {
-      const course = await Course.findById(session.course).select('teacher');
+      const course = await Course.findByRecordId(session.course).select('teacher');
       if (!course || String(course.teacher) !== String(req.user._id)) return res.status(403).json({ message: 'You cannot review this session.' });
     }
     if (!(session.participants || []).some(p => String(p.student) === String(studentId))) return res.status(404).json({ message: 'Student did not join this assessment.' });

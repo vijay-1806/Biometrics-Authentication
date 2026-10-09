@@ -35,7 +35,7 @@ export const ensureSdkLoaded = async () => {
 
     const script = document.createElement('script');
     script.id = 'bioauth-sdk-script';
-    script.src = '/sdk.js';
+    script.src = '/sdk.js?v=focus-confirmed-2';
     script.onload = () => resolve(window.BioAuth);
     script.onerror = () => reject(new Error('Failed to load BioAuth SDK'));
     document.head.appendChild(script);

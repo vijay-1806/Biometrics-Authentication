@@ -114,6 +114,8 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
         let fakeEvents = [];
 
         if (violation.type === 'tab_switch') {
+          // Never show a departure warning while the LMS page still has focus.
+          if (!document.hidden && document.hasFocus()) return;
           msg = 'Tab or Window Switch Detected! This event is logged by proctor.';
           alertType = 'tab_switch';
           fakeEvents = [{ type: 'visibilitychange', hidden: true, timestamp: Date.now() }];
