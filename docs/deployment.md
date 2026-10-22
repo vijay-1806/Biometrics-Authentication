@@ -21,37 +21,97 @@ Nginx forwards `/api/` and `/socket.io/` to the API; `/bio-api/` (with the prefi
 
 The build context excludes local environment files, dataset/model directories, and database exports. Images contain application code and dependencies, not the repository's saved user records.
 
-## GitHub Actions
+## GitHub Actions pipeline
 
-The single CI/CD workflow triggers on pushes and pull requests for `release/v1.2`. Its verification job builds and starts a fresh stack, runs HTTP and authenticated WebSocket checks, runs the existing SaaS customer/tenant tests, recreates the application containers, and verifies saved accounts and enrollment data.
+The workflow runs on pushes and pull requests targeting `release/v1.2`. It has five ordered stages:
 
-All three publish jobs depend on successful verification. They use the workflow's automatically issued token with `packages: write`, and publish only on the release branch, never on pull requests. The default workflow permission is `contents: read`.
+1. **Compile:** install locked frontend dependencies; compile the React production bundle and Python bytecode; syntax-check Node source and deployment scripts; validate Compose; run six tests of deployment success, pull failure, unhealthy rollout, route-health failure, first-install failure, and deployment locking.
+2. **Build:** build the frontend, Node API, and Python images in parallel for `linux/amd64`. Export each as a workflow artifact.
+3. **Test:** load those exact images and start the full stack with `--no-build`. Run the authentication/WebSocket/biometric smoke test, 11 existing SaaS and tenant tests, and container-recreation persistence checks. On failure, upload diagnostics.
+4. **Publish:** after all tests pass, load the same artifacts and push them to GHCR. No image is rebuilt. Publish `sha-<full-commit-sha>` and moving `1.2` tags. Create a release bundle containing `compose.yml`, `release.env` with digest-pinned images, and `deploy.sh`.
+5. **Deploy:** when explicitly enabled, transfer the release bundle to the server over SSH, authenticate to GHCR using the workflow token, pull images before changing the application, update Compose, check container and proxied API health, and record the active release. Failed rollouts restore the previously successful release and still fail the workflow.
 
-The images are tagged with the moving `1.2` tag and `sha-<full-git-sha>`. Each publish rebuilds from that same verified commit. OCI labels identify the repository and revision. The publishing architecture is `linux/amd64`.
+PR runs stop after testing. Publishing requires `packages: write`; deployment uses `packages: read`. The default token permission is `contents: read`. Actions are pinned to commit SHAs. Image artifacts expire after two days, release bundles after 30 days, and frontend bundles/failed-test diagnostics after seven days.
 
-The workflow can be manually dispatched when present on the default branch; pushing to `release/v1.2` runs it without moving this work to another branch.
+The workflow can be manually dispatched when present on the default branch. Pushes to `release/v1.2` run without changing the default branch. The standalone production manifest has no build directives.
 
 ### First-run repository settings
 
-1. Enable GitHub Actions if disabled at the repository or organization level.
-2. Allow the workflow to write packages if organization policy restricts it.
-3. After the first successful publish, open each package under the owner's Packages page and set visibility to public for unauthenticated use. Public repository visibility does not automatically make a new GHCR package public.
-4. If an image name already exists, ensure it is linked to this repository and grants this repository's Actions access.
-5. Optionally make the verification job a required status check in a branch rule.
+Enable Actions and allow package writes if repository/organization policy restricts them. If GHCR package names already exist, grant this repository's Actions access. Packages may remain private for automatic deployment; the workflow token authenticates the pull. For anonymous manual pulls, set all three package visibilities to public.
 
-No manually supplied secrets are needed for CI and GHCR delivery.
+Optionally require the compile, container build, and integration jobs as branch checks.
 
-## Deploying published images
+## Configure the deployment server
 
-Use the registry overlay:
+The implementation targets a Linux amd64 SSH server, such as an EC2 instance or VPS. No host is selected automatically and no cloud resources are provisioned.
+
+Use a MongoDB-supported host kernel. MongoDB 8 currently refuses Linux kernels 6.19 through 7.0.13; Ubuntu 22.04 with its supported older kernel is one suitable target. CI pins `ubuntu-22.04` after the first `ubuntu-latest` run hit this startup guard. See [MongoDB 8 release notes](https://www.mongodb.com/docs/manual/release-notes/8.0/) for current kernel compatibility.
+
+Install Docker Engine, the system Docker Compose plugin (v2.20+), Bash, tar, and `flock` (usually provided by `util-linux`). Give a dedicated deployment user Docker access. Authorize the public half of a deployment SSH key for that user. Ensure GitHub-hosted runners can reach its SSH port. The script uses `~/biometrics-authentication` as its fixed application directory.
+
+Create a GitHub environment named `production`. Add these **environment secrets**:
+
+| Secret | Value |
+| --- | --- |
+| `DEPLOY_SSH_KEY` | Private key for the deployment user, without a passphrase, in OpenSSH format |
+| `DEPLOY_KNOWN_HOSTS` | Verified OpenSSH known-hosts entries for the server; custom ports use `[host]:port` |
+
+Verify the server's key fingerprint through your trusted server console before saving known-hosts entries. The workflow enforces `StrictHostKeyChecking=yes` and does not learn or trust keys automatically.
+
+Add these **repository variables** under Settings → Secrets and variables → Actions → Variables:
+
+| Variable | Value |
+| --- | --- |
+| `DEPLOY_ENABLED` | `true` to enable deployment; absent/false skips deployment |
+| `DEPLOY_HOST` | Server IPv4 address or DNS hostname |
+| `DEPLOY_USER` | SSH username, for example `ubuntu` |
+| `DEPLOY_PORT` | Optional SSH port; default `22` |
+| `DEPLOY_URL` | Optional public HTTPS base URL; enables post-deployment HTTP checks and the environment URL |
+
+Keep `DEPLOY_ENABLED` off until the other values are configured. The server's Docker login uses a temporary workflow token in an isolated config directory; cleanup removes it and leaves existing server credentials alone. No long-lived registry secret is needed.
+
+Trigger deployment with the next push to `release/v1.2`. The production environment records deployment status in GitHub. Optional environment protection rules can restrict deployment branches or require reviewers, but the workflow does not require approval by itself.
+
+### Server directories and instance settings
+
+```text
+~/biometrics-authentication/
+  config.env                   Persistent port/JWT configuration, mode 0600
+  deploy.lock                  Prevents concurrent deployment scripts
+  releases/<commit-sha>-<run-id>-<attempt>/       compose.yml, release.env, deploy.sh
+  current -> releases/...      Active successful release
+  previous -> releases/...     Previous successful release
+```
+
+The first run creates `config.env` with `APP_PORT=8080`, `ML_PORT=8000`, and an empty `JWT_SECRET` (the API generates a persistent key). To customize those values, create/edit that file on the server before deployment. Do not put image references in this file; the release's digest references come from the pipeline.
+
+The fixed Compose project name `biometrics-authentication` keeps the same named volumes across release directories. Neither deployment nor rollback removes volumes. Releases are retained to support rollback; delete older unused bundles only after deciding your retention policy.
+
+### Health checks and rollback
+
+Deployment first pulls every required image. A pull failure leaves the running release untouched. Rollout uses Compose `--wait`, then calls both the LMS and ML readiness routes through Nginx inside the frontend container. If rollout or these route checks fail, the script captures service diagnostics and restarts the previous Compose bundle. On a failed first deployment, it stops application containers while retaining data. If rollback itself fails, the script reports that failure and exits unsuccessfully.
+
+If configured, `DEPLOY_URL` adds public HTTP checks after the remote deployment. A failure here fails the workflow; it does not undo a locally healthy rollout, since a domain/TLS/proxy failure may be external to the containers.
+
+The deployment is a single-server rolling replacement with brief interruptions possible, not a zero-downtime deployment. Rollback restores application images; it does not undo database writes or future schema migrations. Back up persistent state before releases that migrate it.
+
+To restore the previous bundle manually on the server:
+
+```bash
+DEPLOY_ROOT="$HOME/biometrics-authentication" bash "$HOME/biometrics-authentication/previous/deploy.sh" "$HOME/biometrics-authentication/previous"
+```
+
+For private images, authenticate to GHCR before a manual rollback if the image layers are not already cached.
+
+## Manual published-image deployment
+
+A clone can still use the registry overlay:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d --no-build --pull always --wait
 ```
 
-Set `IMAGE_TAG=sha-<full-commit-sha>` in `.env` to select a revision for all three application services. Use the same command for an update. To roll back, select an earlier successful revision and rerun the command. MongoDB and the application volumes are retained. Data/schema compatibility must be assessed before rolling back across future database migrations.
-
-Registry delivery does not automatically update a server. No SSH credentials, server address, cloud provider, or public domain has been configured.
+Set `IMAGE_TAG=sha-<full-commit-sha>` in `.env` to select a revision for all three services. Private packages require `docker login ghcr.io`; public packages support anonymous pulls. This convenience command is separate from the automatic deployment bundle, which pins images by digest.
 
 ## Before public hosting
 

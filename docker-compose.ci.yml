@@ -1,0 +1,8 @@
+# Load images built by the build job; integration tests must never rebuild them.
+services:
+  frontend:
+    image: biometrics-ci/frontend:${IMAGE_TAG:?Set the Git commit SHA}
+  backend:
+    image: biometrics-ci/backend:${IMAGE_TAG:?Set the Git commit SHA}
+  ml:
+    image: biometrics-ci/ml:${IMAGE_TAG:?Set the Git commit SHA}

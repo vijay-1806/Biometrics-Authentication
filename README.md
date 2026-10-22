@@ -132,29 +132,44 @@ Docker Compose waits for dependencies to report healthy. Named volumes preserve 
 
 ## CI / CD
 
-The [GitHub Actions workflow](.github/workflows/ci-cd.yml) runs for pull requests and pushes targeting **`release/v1.2`**. A manual run is also available once GitHub exposes the workflow on the default branch.
+The [GitHub Actions workflow](.github/workflows/ci-cd.yml) runs for pull requests and pushes targeting **`release/v1.2`**.
 
 ```mermaid
 flowchart LR
-    Change["PR / release branch push"] --> Build["Build all three app images"]
-    Build --> Healthy["Start fresh Compose stack"]
-    Healthy --> Test["Auth + sockets + biometrics + tenant tests"]
-    Test --> Persist["Recreate services + verify persistence"]
-    Persist --> Gate{"Release branch push?"}
-    Gate -->|Yes| Registry["Publish three images to GHCR"]
+    Source["PR / release push"] --> Compile["Compile React + Python / check Node"]
+    Compile --> Build["Build 3 container images"]
+    Build --> Test["Integration + tenant + persistence tests"]
+    Test --> Publish["Publish tested images to GHCR"]
+    Publish --> Deploy["Deploy to server via SSH"]
+    Deploy --> Health{"Healthy?"}
+    Health -->|Yes| Live["Record active release"]
+    Health -->|No| Rollback["Restore previous release"]
 ```
 
-The pipeline checks SPA routes, API readiness, signup/login, student role enforcement, authenticated WebSockets, SDK delivery, biometric enrollment, customer workspace access, and persistence after recreating services. Failed runs upload Compose logs for diagnosis.
+| Stage | What happens |
+| --- | --- |
+| **Build / compile** | Install locked frontend dependencies, build React, compile Python, check Node syntax, validate Compose/scripts, and run six deployment orchestration tests. |
+| **Container build** | Build frontend, backend, and ML images in parallel; pass them onward as workflow artifacts. |
+| **Test** | Run those exact images against a fresh MongoDB; test authentication, role enforcement, WebSockets, SDK delivery, enrollment, 11 SaaS/tenant checks, and persistence after container recreation. |
+| **Publish** | Push the tested images to GHCR without rebuilding. Create a deployment bundle pinned to image digests. |
+| **Deploy** | Transfer the bundle over verified SSH, pull images, update Docker Compose, check health, and restore the previous release on rollout failure. Optionally check the public application URL too. |
 
-Successful release-branch runs publish these **Linux amd64** images:
+Pull requests stop after testing. Release-branch pushes continue to publishing and, once configured, deployment. Failed integration runs upload Compose logs for diagnosis. Production deployment is serialized to prevent overlapping updates.
 
-- `ghcr.io/vijay-1806/biometrics-authentication-frontend`
-- `ghcr.io/vijay-1806/biometrics-authentication-backend`
-- `ghcr.io/vijay-1806/biometrics-authentication-ml`
+Images are published under `ghcr.io/vijay-1806/biometrics-authentication-{frontend,backend,ml}`, with `1.2` and `sha-<full-commit-sha>` tags. The deployment bundle uses immutable **digest references**, so production receives the images that passed the tests. Images target Linux amd64.
 
-Each image gets `1.2` and `sha-<full-commit-sha>` tags. Publishing uses GitHub's built-in `GITHUB_TOKEN`; no Docker Hub credentials are needed. Pull requests cannot publish. Actions are pinned to commit SHAs, with Dependabot configured to propose updates.
+### Activate automatic deployment
 
-This is continuous delivery to the container registry. Automatic deployment to a running server is not configured because no hosting destination has been selected.
+The deploy job is implemented for a Linux server reached over SSH, including AWS EC2 and other VPS providers. **A server has not yet been configured.** Publishing works independently; the deploy job remains skipped until you set the repository variable `DEPLOY_ENABLED=true`.
+
+1. Prepare a Linux amd64 server with Docker Engine, Compose v2.20+, Bash, and `flock`. The SSH user must be able to run Docker.
+2. In GitHub repository **Settings → Environments**, create `production` and add secrets `DEPLOY_SSH_KEY` and `DEPLOY_KNOWN_HOSTS` (verified host-key entries).
+3. Under **Settings → Secrets and variables → Actions → Variables**, set `DEPLOY_HOST`, `DEPLOY_USER`, optional `DEPLOY_PORT` (default `22`), and optional `DEPLOY_URL` (your HTTPS app URL).
+4. Set the repository variable `DEPLOY_ENABLED=true` after the host and secrets are ready, then push to `release/v1.2`.
+
+The pipeline uses its temporary `GITHUB_TOKEN` to pull even private GHCR images on the server. No Docker Hub credentials or long-lived GHCR token are required. SSH credentials are kept out of release artifacts, and the temporary registry login is removed after deployment.
+
+Releases live at `~/biometrics-authentication/releases/<commit-sha>-<run-id>-<attempt>`. The `current` and `previous` symlinks track successful deployments. Persistent volumes and `~/biometrics-authentication/config.env` survive updates. The supplied ports bind to localhost; point your server's HTTPS reverse proxy at port 8080. See the [deployment guide](docs/deployment.md) for setup, health checks, and rollback.
 
 ### Run published images
 
@@ -216,6 +231,7 @@ docs/                            Architecture, security, deployment, and demo gu
 scripts/                         Development helpers and integration smoke test
 docker-compose.yml               Complete source-build stack
 docker-compose.registry.yml      Optional published-image overlay
+docker-compose.deploy.yml        Digest-pinned server deployment manifest
 ```
 
 ## Troubleshooting
@@ -224,6 +240,7 @@ docker-compose.registry.yml      Optional published-image overlay
 | --- | --- |
 | Cannot connect to Docker | Start Docker Desktop/Engine and ensure your user can access it. |
 | Port 8080 or 8000 is occupied | Change `APP_PORT` or `ML_PORT` in `.env`, then rerun Compose. |
+| MongoDB logs mention an incompatible kernel | See the [host compatibility notes](docs/deployment.md#configure-the-deployment-server); this also affects Docker hosts. |
 | A service is unhealthy | Run `docker compose ps` and `docker compose logs <service>`. |
 | No existing courses or trained users | A fresh container installation starts empty. Create accounts and enroll new profiles. |
 | Teacher signup is unavailable | Provision the account with the explicit staff command above. |
