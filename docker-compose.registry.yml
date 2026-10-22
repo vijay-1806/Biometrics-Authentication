@@ -1,0 +1,9 @@
+# Optional overlay: run published images instead of building on this machine.
+# docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d --no-build --pull always --wait
+services:
+  frontend:
+    image: ghcr.io/vijay-1806/biometrics-authentication-frontend:${IMAGE_TAG:-1.2}
+  backend:
+    image: ghcr.io/vijay-1806/biometrics-authentication-backend:${IMAGE_TAG:-1.2}
+  ml:
+    image: ghcr.io/vijay-1806/biometrics-authentication-ml:${IMAGE_TAG:-1.2}

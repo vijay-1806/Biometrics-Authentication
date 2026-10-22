@@ -18,7 +18,7 @@ const MLAdminDashboard = () => {
 
   // Axios instance specifically for ML Backend
   const mlApi = axios.create({
-    baseURL: 'http://localhost:8000/v1',
+    baseURL: '/bio-api/v1',
     headers: token ? { Authorization: `Bearer ${token}` } : {}
   });
 

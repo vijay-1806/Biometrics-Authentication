@@ -30,3 +30,7 @@ yarn-error.log*
 .eslintcache
 .gemini/
 .DS_Store
+
+# Ephemeral CI credentials
+.smoke-state.json
+artifacts/

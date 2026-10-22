@@ -126,7 +126,7 @@ const QuizPage = () => {
     joinAttemptRef.current = requestedPin;
     setSessionError('');
     
-    const socketHost = typeof window !== 'undefined' ? `http://${window.location.hostname}:5000` : 'http://localhost:5000';
+    const socketHost = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000';
     socketRef.current = io(socketHost, { transports: ['websocket', 'polling'], auth: { token: localStorage.getItem('token') } });
     const socket = socketRef.current;
     

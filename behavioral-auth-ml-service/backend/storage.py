@@ -57,7 +57,7 @@ def _sync_aliases_from_mongo():
     """Dynamically scan MongoDB lms_demo to index all user accounts."""
     try:
         import pymongo
-        client = pymongo.MongoClient('mongodb://localhost:27017/', serverSelectionTimeoutMS=400)
+        client = pymongo.MongoClient(os.getenv('MONGO_URI', 'mongodb://localhost:27017/lms_demo'), serverSelectionTimeoutMS=400)
         db = client['lms_demo']
         users = list(db.users.find({}, {'_id': 1, 'name': 1, 'email': 1}))
         for u in users:
@@ -88,7 +88,7 @@ def _resolve_canonical_id(user_id: str) -> str:
     try:
         import pymongo
         from bson import ObjectId
-        client = pymongo.MongoClient('mongodb://localhost:27017/', serverSelectionTimeoutMS=400)
+        client = pymongo.MongoClient(os.getenv('MONGO_URI', 'mongodb://localhost:27017/lms_demo'), serverSelectionTimeoutMS=400)
         db = client['lms_demo']
         
         query = None

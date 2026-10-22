@@ -26,6 +26,12 @@ initSocket(server);
 app.use(cors());
 app.use(express.json());
 
+// Readiness includes MongoDB so Compose waits for usable authentication routes.
+app.get('/api/health', (req, res) => {
+  const ready = require('mongoose').connection.readyState === 1;
+  res.status(ready ? 200 : 503).json({ status: ready ? 'healthy' : 'starting' });
+});
+
 // Basic sanity check route
 app.get('/', (req, res) => {
   res.json({ message: 'LMS API is running...' });
