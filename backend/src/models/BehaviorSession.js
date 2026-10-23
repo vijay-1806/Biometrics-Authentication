@@ -13,7 +13,7 @@ const behaviorSessionSchema = new mongoose.Schema(
     },
     exam: {
       type: mongoose.Schema.Types.Mixed, // Quiz or Assignment ID
-      required: true,
+      required: false,
     },
     session: {
       type: String, // Unique session identifier for each exam run
@@ -60,6 +60,15 @@ const behaviorSessionSchema = new mongoose.Schema(
     deviceChangeFlagged: {
       type: Boolean,
       default: false,
+    },
+    assessmentSessionId: {
+      type: String,
+      required: false,
+      index: true,
+    },
+    sessionPin: {
+      type: String,
+      required: false,
     }
   },
   {
@@ -67,7 +76,8 @@ const behaviorSessionSchema = new mongoose.Schema(
   }
 );
 
-// TTL index to automatically clear sessions after 24 hours (86400 seconds)
-behaviorSessionSchema.index({ createdAt: 1 }, { expireAfterSeconds: 86400 });
+// Keep session summaries available for post-assessment review.
+behaviorSessionSchema.index({ createdAt: 1 });
+behaviorSessionSchema.index({ student: 1, assessmentSessionId: 1 });
 
 module.exports = mongoose.model('BehaviorSession', behaviorSessionSchema);

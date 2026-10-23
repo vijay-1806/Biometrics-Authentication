@@ -1,0 +1,4 @@
+user_id,profile_owner_id,genuine_samples,impostor_samples,genuine_mean_trust,impostor_mean_trust,far,frr,auc
+vijay,vijay,10,10,58.2,27.1,0.100,0.000,0.965
+6a76a437f5922b18a8d0c3b0,6a76a437f5922b18a8d0c3b0,10,10,55.4,28.2,0.100,0.000,0.955
+student_riya,student_riya,10,10,56.8,27.5,0.100,0.000,0.962

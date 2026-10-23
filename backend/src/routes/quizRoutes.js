@@ -1,15 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const {
-  createQuiz,
+  configureLiveAssessment,
+  deleteQuiz,
   getQuizById,
   submitQuiz,
   getQuizResults,
 } = require('../controllers/quizController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
-router.route('/')
-  .post(protect, authorize('teacher', 'admin'), createQuiz);
+router.patch('/:id/live', protect, authorize('teacher', 'admin'), configureLiveAssessment);
+router.delete('/:id', protect, authorize('teacher', 'admin'), deleteQuiz);
 
 router.route('/:id')
   .get(protect, getQuizById);

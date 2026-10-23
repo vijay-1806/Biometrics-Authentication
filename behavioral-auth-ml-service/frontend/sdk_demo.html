@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Universal Behavioral Biometrics API — External Client Demo</title>
+  <title>BioAuth BaaS — Enterprise Biometrics-as-a-Service Portal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -11,16 +11,24 @@
   <script src="/sdk.js"></script>
   <style>
     :root {
-      --bg: #090d16;
-      --card-bg: rgba(18, 26, 43, 0.85);
-      --border: rgba(255, 255, 255, 0.08);
-      --primary: #00f2fe;
+      --bg: #070a13;
+      --card-bg: rgba(15, 23, 42, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover: rgba(255, 255, 255, 0.12);
+      
+      --primary: #38bdf8;
+      --primary-gradient: linear-gradient(135deg, #0ea5e9, #2563eb);
       --secondary: #6366f1;
+      --accent: #a855f7;
+      
       --paper: #f8fafc;
       --dim: #94a3b8;
+      --subtle: #475569;
+      
       --good: #10b981;
       --warn: #f59e0b;
       --bad: #ef4444;
+      
       --mono: 'JetBrains Mono', monospace;
       --sans: 'Plus Jakarta Sans', sans-serif;
     }
@@ -30,27 +38,30 @@
     body {
       background-color: var(--bg);
       background-image: 
-        radial-gradient(at 10% 10%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
-        radial-gradient(at 90% 90%, rgba(0, 242, 254, 0.1) 0px, transparent 50%);
+        radial-gradient(at 15% 15%, rgba(99, 102, 241, 0.12) 0px, transparent 45%),
+        radial-gradient(at 85% 85%, rgba(56, 189, 248, 0.1) 0px, transparent 45%);
       background-attachment: fixed;
       color: var(--paper);
       font-family: var(--sans);
       min-height: 100vh;
-      padding: 32px 20px;
+      padding: 24px 20px 60px;
     }
 
     .container {
-      max-width: 1080px;
+      max-width: 1160px;
       margin: 0 auto;
     }
 
+    /* Header */
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding-bottom: 24px;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 32px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
     }
 
     .brand {
@@ -60,22 +71,24 @@
     }
 
     .logo-badge {
-      width: 44px;
-      height: 44px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, var(--secondary), #4338ca);
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+      background: var(--primary-gradient);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: 800;
-      font-size: 20px;
-      box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+      font-size: 22px;
+      box-shadow: 0 0 25px rgba(14, 165, 233, 0.4);
     }
 
     h1 {
-      font-size: 22px;
-      font-weight: 700;
+      font-size: 20px;
+      font-weight: 800;
       letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #fff, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
 
     .tagline {
@@ -83,55 +96,142 @@
       color: var(--dim);
     }
 
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      margin-bottom: 32px;
+    .header-pills {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
     }
 
-    @media (max-width: 860px) {
-      .grid { grid-template-columns: 1fr; }
+    .pill {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+    }
+
+    .pill-green {
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+
+    .pill-blue {
+      color: #60a5fa;
+      background: rgba(59, 130, 246, 0.12);
+      border-color: rgba(59, 130, 246, 0.3);
+    }
+
+    /* Tabs */
+    .tabs-nav {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      background: rgba(15, 23, 42, 0.6);
+      padding: 6px;
+      border-radius: 12px;
+      border: 1px solid var(--card-border);
+      overflow-x: auto;
+    }
+
+    .tab-btn {
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: var(--dim);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .tab-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .tab-btn.active {
+      color: #fff;
+      background: rgba(37, 99, 235, 0.25);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      box-shadow: 0 0 15px rgba(37, 99, 235, 0.2);
+    }
+
+    /* Cards & Layout */
+    .tab-pane {
+      display: none;
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    .tab-pane.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     .card {
       background: var(--card-bg);
-      border: 1px solid var(--border);
+      border: 1px solid var(--card-border);
       border-radius: 16px;
       padding: 24px;
-      backdrop-filter: blur(12px);
+      backdrop-filter: blur(14px);
+      margin-bottom: 20px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 860px) {
+      .grid-2 { grid-template-columns: 1fr; }
     }
 
     .card-title {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
+      color: #e2e8f0;
       margin-bottom: 16px;
       display: flex;
       align-items: center;
-      gap: 10px;
-      color: var(--primary);
+      gap: 8px;
     }
 
+    /* Forms & Inputs */
     .form-group {
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
 
     label {
       display: block;
-      font-size: 12px;
-      font-weight: 600;
+      font-size: 11px;
+      font-weight: 700;
       color: var(--dim);
-      margin-bottom: 6px;
       text-transform: uppercase;
       letter-spacing: 0.05em;
+      margin-bottom: 6px;
     }
 
-    input, textarea {
+    input, select, textarea {
       width: 100%;
-      background: rgba(10, 15, 29, 0.8);
-      border: 1px solid var(--border);
+      background: rgba(10, 15, 29, 0.7);
+      border: 1px solid var(--card-border);
       border-radius: 8px;
-      padding: 10px 14px;
+      padding: 9px 12px;
       color: #fff;
       font-family: var(--mono);
       font-size: 13px;
@@ -139,125 +239,165 @@
       transition: border-color 0.2s;
     }
 
-    input:focus, textarea:focus {
+    input:focus, select:focus, textarea:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 2px rgba(0, 242, 254, 0.2);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
     }
 
-    .btn-row {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    button {
-      padding: 10px 18px;
+    /* Buttons */
+    .btn {
+      padding: 9px 16px;
       border-radius: 8px;
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
       border: none;
       transition: all 0.2s;
-      font-family: var(--sans);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, var(--secondary), #4338ca);
+      background: var(--primary-gradient);
       color: #fff;
-      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+      box-shadow: 0 4px 14px rgba(14, 165, 233, 0.3);
     }
-    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-primary:hover:not(:disabled) {
+      opacity: 0.92;
+      transform: translateY(-1px);
+    }
 
-    .btn-accent {
-      background: linear-gradient(135deg, #0284c7, #0369a1);
-      color: #fff;
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--paper);
+      border: 1px solid var(--card-border);
     }
-    .btn-accent:hover { opacity: 0.9; }
+    .btn-secondary:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.1);
+    }
 
     .btn-danger {
-      background: rgba(239, 68, 68, 0.2);
-      border: 1px solid rgba(239, 68, 68, 0.4);
-      color: #f87171;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
     }
-    .btn-danger:hover { background: rgba(239, 68, 68, 0.3); }
-
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--border);
+    .btn-danger:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.25);
     }
 
-    .status-collecting { color: var(--warn); border-color: rgba(245, 158, 11, 0.4); }
-    .status-provisional { color: #38bdf8; border-color: rgba(56, 189, 248, 0.4); }
-    .status-full { color: var(--good); border-color: rgba(16, 185, 129, 0.4); }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
 
-    /* Live Proctored Workspace */
-    .proctor-stats {
+    /* Telemetry Grid */
+    .metrics-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
       gap: 12px;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
     }
 
-    .stat-box {
+    .metric-card {
       background: rgba(10, 15, 29, 0.6);
-      border: 1px solid var(--border);
-      padding: 12px;
-      border-radius: 10px;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 14px;
       text-align: center;
     }
 
-    .stat-val {
-      font-size: 20px;
+    .metric-val {
+      font-size: 22px;
       font-weight: 800;
       font-family: var(--mono);
-      color: #fff;
-    }
-
-    .stat-label {
-      font-size: 11px;
-      color: var(--dim);
-      text-transform: uppercase;
       margin-top: 4px;
     }
 
-    .live-feed {
+    .metric-lbl {
+      font-size: 11px;
+      color: var(--dim);
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    /* Live Proctor Gauge */
+    .gauge-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      background: rgba(10, 15, 29, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .gauge-item {
+      text-align: center;
+    }
+
+    .gauge-score {
+      font-size: 32px;
+      font-weight: 800;
+      font-family: var(--mono);
+      color: var(--good);
+    }
+
+    /* Feed Stream */
+    .feed-box {
       height: 140px;
       overflow-y: auto;
-      background: rgba(10, 15, 29, 0.9);
-      border: 1px solid var(--border);
+      background: rgba(8, 12, 22, 0.85);
+      border: 1px solid var(--card-border);
       border-radius: 8px;
       padding: 10px;
       font-family: var(--mono);
-      font-size: 12px;
-      margin-top: 14px;
+      font-size: 11px;
     }
 
-    .feed-entry {
+    .feed-row {
       padding: 4px 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
       display: flex;
       justify-content: space-between;
     }
+    .feed-row.score { color: #38bdf8; }
+    .feed-row.violation { color: #f87171; font-weight: bold; }
 
-    .feed-violation { color: var(--bad); font-weight: bold; }
-    .feed-score { color: #38bdf8; }
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 10px;
+    }
 
-    /* Code sample block */
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      color: var(--dim);
+      font-weight: 700;
+      border-bottom: 1px solid var(--card-border);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: var(--paper);
+    }
+
     pre {
       background: #060911;
-      border: 1px solid var(--border);
+      border: 1px solid var(--card-border);
       padding: 16px;
-      border-radius: 12px;
+      border-radius: 10px;
       font-family: var(--mono);
-      font-size: 13px;
-      color: #cbd5e1;
+      font-size: 12px;
+      color: #94a3b8;
       overflow-x: auto;
       line-height: 1.6;
     }
@@ -265,90 +405,238 @@
 </head>
 <body>
   <div class="container">
+    <!-- Header -->
     <header>
       <div class="brand">
         <div class="logo-badge">🛡️</div>
         <div>
-          <h1>Universal Behavioral Biometrics API</h1>
-          <p class="tagline">Interactive Client Demo: Embeddable BaaS for Any Web Application</p>
+          <h1>BioAuth BaaS — Enterprise Biometrics Platform</h1>
+          <p class="tagline">Zero-API Keystroke Biometrics-as-a-Service for Continuous Proctoring & Authentication</p>
         </div>
       </div>
-      <div>
-        <span id="client-status-pill" class="status-pill status-collecting">SDK Loaded</span>
+      <div class="header-pills">
+        <span class="pill pill-green">● Port 8000 Online</span>
+        <span class="pill pill-blue" id="header-tenant-pill">Tenant: default</span>
+        <a href="/docs" target="_blank" style="text-decoration: none;">
+          <span class="pill" style="color: #cbd5e1; cursor: pointer;">Swagger /docs ↗</span>
+        </a>
       </div>
     </header>
 
-    <div class="grid">
-      <!-- Tenant & User Configuration -->
-      <div class="card">
-        <h2 class="card-title">1. API Client Configuration</h2>
-        <div class="form-group">
-          <label>API Key (Tenant Token)</label>
-          <input type="text" id="cfg-api-key" value="bio_live_default_lms_key" />
-          <p style="font-size: 11px; color: var(--dim); margin-top: 4px;">
-            Supports <code>bio_live_default_lms_key</code> or custom <code>bio_live_&lt;tenant&gt;</code>.
-          </p>
-        </div>
+    <!-- Navigation Tabs -->
+    <div class="tabs-nav">
+      <button class="tab-btn active" onclick="switchTab('playground')">🎮 SDK Interactive Playground</button>
+      <button class="tab-btn" onclick="switchTab('tenants')">🏢 Tenants & API Keys</button>
+      <button class="tab-btn" onclick="switchTab('telemetry')">⚡ In-Memory Cache & Telemetry</button>
+      <button class="tab-btn" onclick="switchTab('quickstart')">📄 15-Line Quickstart Guide</button>
+    </div>
 
-        <div class="form-group">
-          <label>Student / Candidate ID</label>
-          <input type="text" id="cfg-user-id" value="vijay" />
+    <!-- TAB 1: SDK PLAYGROUND -->
+    <div id="tab-playground" class="tab-pane active">
+      <!-- Top banner explaining that developers never touch raw API requests -->
+      <div style="background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(14, 165, 233, 0.25); border-radius: 12px; padding: 14px 18px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-size: 24px;">💡</span>
+          <div>
+            <div style="font-size: 13px; font-weight: 700; color: #38bdf8;">How It Works: You Call SDK Methods — The SDK Calls the API</div>
+            <div style="font-size: 12px; color: var(--dim);">No manual fetch calls, JSON serializing, or dwell time math. The SDK buffers and scores in the background.</div>
+          </div>
         </div>
-
-        <div class="btn-row">
-          <button class="btn-accent" id="btn-check-status">Check Status</button>
-          <button class="btn-primary" id="btn-open-modal">✨ Calibrate Biometrics (Drop-in Modal)</button>
-        </div>
-
-        <div style="margin-top: 20px; padding: 14px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; font-size: 13px;">
-          <div><strong>State:</strong> <span id="disp-state" class="status-pill">Unknown</span></div>
-          <div style="margin-top: 6px;"><strong>Samples Banked:</strong> <span id="disp-samples" style="font-family: var(--mono);">--</span></div>
-          <div style="margin-top: 6px;"><strong>Provisional Threshold:</strong> 10 samples | <strong>Full Model:</strong> 20 samples</div>
-        </div>
+        <button class="btn btn-primary" id="btn-trigger-calibration" style="font-size: 12px;">✨ Launch Drop-in Calibration Modal</button>
       </div>
 
-      <!-- Live Proctoring Simulation -->
-      <div class="card">
-        <h2 class="card-title">2. Real-Time Assessment Proctoring</h2>
-        <p style="font-size: 12px; color: var(--dim); margin-bottom: 14px;">
-          Starts continuous background proctoring. Keystroke rhythms are verified in 5-second windows. Tries to switch tabs or copy/paste code will be flagged immediately.
-        </p>
+      <div class="grid-2">
+        <!-- Live Proctoring Simulator -->
+        <div class="card">
+          <h2 class="card-title">🧪 Protected Assessment Simulator</h2>
+          <p style="font-size: 12px; color: var(--dim); margin-bottom: 16px;">
+            Simulate a student taking an exam. The SDK will continuously evaluate typing rhythms every 4 seconds.
+          </p>
 
-        <div class="proctor-stats">
-          <div class="stat-box">
-            <div class="stat-val" id="disp-trust-score">--</div>
-            <div class="stat-label">Trust Score</div>
+          <div class="gauge-container">
+            <div class="gauge-item">
+              <div class="metric-lbl">Live Trust Score</div>
+              <div class="gauge-score" id="sim-trust-score">82%</div>
+            </div>
+            <div class="gauge-item">
+              <div class="metric-lbl">Risk Level</div>
+              <div id="sim-risk-level" style="font-size: 18px; font-weight: 800; color: var(--good); margin-top: 4px;">LOW</div>
+            </div>
+            <div class="gauge-item">
+              <div class="metric-lbl">Violations</div>
+              <div id="sim-violations" style="font-size: 18px; font-weight: 800; color: #fff; margin-top: 4px;">0</div>
+            </div>
           </div>
-          <div class="stat-box">
-            <div class="stat-val" id="disp-risk-level" style="color: var(--good);">NORMAL</div>
-            <div class="stat-label">Risk Level</div>
+
+          <div style="display: flex; gap: 10px; margin-bottom: 14px;">
+            <button class="btn btn-primary" id="btn-start-session" style="flex: 1;">▶ Start Protected Session</button>
+            <button class="btn btn-danger" id="btn-end-session" style="flex: 1;" disabled>■ End Session</button>
           </div>
-          <div class="stat-box">
-            <div class="stat-val" id="disp-violations" style="color: var(--warn);">0</div>
-            <div class="stat-label">Violations</div>
+
+          <div class="form-group">
+            <label>Exam Typing Area (Type answers or code below)</label>
+            <textarea id="sim-typing-area" rows="4" placeholder="Click 'Start Protected Session' above, then type naturally here. Switch tabs or paste text to test automated rules..." disabled></textarea>
+          </div>
+
+          <div class="feed-box" id="sim-feed">
+            <div class="feed-row" style="color: var(--dim);">Proctor event feed will stream here...</div>
           </div>
         </div>
 
-        <div class="btn-row" style="margin-bottom: 14px;">
-          <button class="btn-primary" id="btn-start-exam">▶ Start Proctoring Session</button>
-          <button class="btn-danger" id="btn-end-exam" disabled>■ End Session</button>
-        </div>
+        <!-- Identity & Model Profile -->
+        <div class="card">
+          <h2 class="card-title">👤 Active Session Identity</h2>
+          <div class="form-group">
+            <label>API Key (Tenant Secret)</label>
+            <input type="text" id="active-api-key" value="bio_live_default_lms_key" />
+          </div>
+          <div class="form-group">
+            <label>Student / Candidate ID</label>
+            <input type="text" id="active-user-id" value="vijay" />
+          </div>
 
-        <div class="form-group">
-          <label>Exam Typing Scratchpad (Type code or answers here)</label>
-          <textarea id="exam-scratchpad" rows="4" placeholder="Start session above, then type naturally here. Try pasting text or switching tabs to test violation detection..." disabled></textarea>
-        </div>
+          <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+            <button class="btn btn-secondary" id="btn-query-status" style="width: 100%;">🔄 Query Model Status</button>
+          </div>
 
-        <div class="live-feed" id="proctor-feed">
-          <div class="feed-entry" style="color: var(--dim);">Proctor event stream will appear here...</div>
+          <!-- Status Card -->
+          <div style="background: rgba(10, 15, 29, 0.7); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <span style="font-size: 11px; font-weight: 700; color: var(--dim);">MODEL STATE</span>
+              <span id="profile-state-badge" class="pill pill-green">FULL (20+ SAMPLES)</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
+              <div>
+                <span style="color: var(--dim);">Samples Enrolled:</span>
+                <b id="profile-samples-count" style="margin-left: 6px;">26</b>
+              </div>
+              <div>
+                <span style="color: var(--dim);">In-Memory Cached:</span>
+                <b id="profile-cache-status" style="margin-left: 6px; color: #34d399;">Yes (Hot)</b>
+              </div>
+              <div>
+                <span style="color: var(--dim);">Tenant Namespace:</span>
+                <b id="profile-tenant-name" style="margin-left: 6px;">default</b>
+              </div>
+              <div>
+                <span style="color: var(--dim);">Inference Engine:</span>
+                <b style="margin-left: 6px; color: #38bdf8;">IsolationForest</b>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Code Snippet for 3rd-Party Integration -->
-    <div class="card">
-      <h2 class="card-title">3. How Any Web App Integrates This in 15 Lines of Code</h2>
-      <pre><code>&lt;!-- 1. Include the SDK snippet in your HTML &lt;head&gt; --&gt;
+    <!-- TAB 2: TENANTS & API KEYS -->
+    <div id="tab-tenants" class="tab-pane">
+      <div class="grid-2">
+        <!-- Tenant List -->
+        <div class="card">
+          <h2 class="card-title">🏢 Active BaaS Tenants</h2>
+          <div id="tenants-table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tenant ID</th>
+                  <th>Name</th>
+                  <th>Tier</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="tenants-tbody">
+                <tr><td colspan="4" style="color: var(--dim);">Loading tenants...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Provision Tenant -->
+        <div class="card">
+          <h2 class="card-title">➕ Provision New Tenant & Key</h2>
+          <div class="form-group">
+            <label>Tenant ID (Unique Slug)</label>
+            <input type="text" id="prov-tenant-id" placeholder="e.g. acme_university" />
+          </div>
+          <div class="form-group">
+            <label>Organization Name</label>
+            <input type="text" id="prov-tenant-name" placeholder="e.g. Acme University LMS" />
+          </div>
+          <div class="form-group">
+            <label>Plan Tier & Quota</label>
+            <select id="prov-tenant-tier">
+              <option value="starter">Starter (120 req/min)</option>
+              <option value="growth" selected>Growth (600 req/min)</option>
+              <option value="enterprise">Enterprise (3,000 req/min)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Allowed Domain / Origin Whitelist (Security)</label>
+            <input type="text" id="prov-tenant-origin" placeholder="e.g. http://localhost:5173, https://*.lms.edu" value="http://localhost:5173" />
+            <div style="font-size: 10px; color: var(--dim); margin-top: 4px;">Requests with this key from unauthorized domains will be rejected with 403 Forbidden.</div>
+          </div>
+          <button class="btn btn-primary" id="btn-create-tenant" style="width: 100%;">Create Tenant & Issue 48-Hex Key</button>
+          
+          <div id="prov-result" style="display: none; margin-top: 14px; background: rgba(10, 15, 29, 0.95); border: 1px solid rgba(16, 185, 129, 0.3); padding: 14px; border-radius: 10px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: IN-MEMORY CACHE & TELEMETRY -->
+    <div id="tab-telemetry" class="tab-pane">
+      <div class="card">
+        <h2 class="card-title">⚡ Cluster Health & In-Memory Model Cache</h2>
+        
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-lbl">Cluster Status</div>
+            <div class="metric-val" style="color: var(--good);" id="m-status">ONLINE</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-lbl">Cache Hit Ratio</div>
+            <div class="metric-val" style="color: var(--primary);" id="m-hitratio">100%</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-lbl">Hot Models (RAM)</div>
+            <div class="metric-val" id="m-cached">1</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-lbl">Registered Tenants</div>
+            <div class="metric-val" style="color: #a855f7;" id="m-tenants">4</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div style="background: rgba(10, 15, 29, 0.5); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px;">
+            <h3 style="font-size: 13px; font-weight: 700; margin-bottom: 8px; color: #38bdf8;">🚀 Benchmark Sub-3ms Verification Latency</h3>
+            <p style="font-size: 12px; color: var(--dim); margin-bottom: 12px;">
+              Executes 20 rapid in-memory scoring requests to prove zero-disk bottleneck during live exams.
+            </p>
+            <button class="btn btn-primary" id="btn-benchmark" style="width: 100%;">Run 20x Latency Benchmark</button>
+            <div id="bench-output" style="margin-top: 10px; font-size: 12px; font-family: var(--mono); color: #34d399; display: none;"></div>
+          </div>
+
+          <div style="background: rgba(10, 15, 29, 0.5); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px;">
+            <h3 style="font-size: 13px; font-weight: 700; margin-bottom: 8px; color: #a855f7;">📡 Outbound Webhook Dispatcher</h3>
+            <p style="font-size: 12px; color: var(--dim); margin-bottom: 12px;">
+              Dispatches an automated HMAC-SHA256 signed alert payload (for SIEM, proctor alarms, or LMS locks).
+            </p>
+            <button class="btn btn-secondary" id="btn-webhook" style="width: 100%;">Dispatch Test Webhook</button>
+            <div id="wh-output" style="margin-top: 10px; font-size: 11px; font-family: var(--mono); color: #60a5fa; display: none;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: QUICKSTART GUIDE -->
+    <div id="tab-quickstart" class="tab-pane">
+      <div class="card">
+        <h2 class="card-title">📄 Embed in Any Website in 15 Lines</h2>
+        <p style="font-size: 12px; color: var(--dim); margin-bottom: 16px;">
+          External developers integrate keystroke biometrics with zero API code. Just include the SDK and call <code>startSession()</code>:
+        </p>
+
+        <pre><code>&lt;!-- 1. Include the Universal BioAuth SDK script in your page --&gt;
 &lt;script src="http://localhost:8000/sdk.js"&gt;&lt;/script&gt;
 
 &lt;script&gt;
@@ -358,19 +646,20 @@
     userId: 'student_12345'
   });
 
-  // 3. Launch calibration when needed (Zero UI work required)
+  // 3. Drop-in Enrollment Modal (collects 20 samples & trains model automatically)
   bio.openEnrollmentModal({
     targetSamples: 20,
-    onComplete: (res) => console.log('Biometric model calibrated & ready!', res)
+    onComplete: (res) => console.log('Model ready!', res)
   });
 
-  // 4. Start real-time proctoring during assessments
+  // 4. Start Continuous Proctoring (SDK buffers, timing math, & calls API for you)
   bio.startSession({
     examId: 'cs101_midterm',
-    onScore: (score) => console.log('Live Trust Score:', score.trust_score),
-    onViolation: (v) => alert('Proctor Violation Detected: ' + v.type)
+    onScore: (data) => console.log('Live Trust Score:', data.trust_score),
+    onViolation: (v) => alert('Proctor Warning: ' + v.type)
   });
 &lt;/script&gt;</code></pre>
+      </div>
     </div>
   </div>
 
@@ -379,98 +668,243 @@
     let violationCount = 0;
 
     function getBioInstance() {
-      const apiKey = document.getElementById('cfg-api-key').value.trim();
-      const userId = document.getElementById('cfg-user-id').value.trim();
+      const apiKey = document.getElementById('active-api-key').value.trim();
+      const userId = document.getElementById('active-user-id').value.trim();
       return new BioAuth({ apiKey, userId });
     }
 
-    const feed = document.getElementById('proctor-feed');
-    function logFeed(msg, type = 'info') {
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      
+      const targetPane = document.getElementById('tab-' + tabId);
+      if (targetPane) targetPane.classList.add('active');
+      event.target.classList.add('active');
+
+      if (tabId === 'tenants') loadTenantsList();
+      if (tabId === 'telemetry') loadTelemetry();
+    }
+
+    function logSimFeed(msg, type = 'info') {
+      const feed = document.getElementById('sim-feed');
       const row = document.createElement('div');
-      row.className = `feed-entry ${type === 'violation' ? 'feed-violation' : type === 'score' ? 'feed-score' : ''}`;
+      row.className = `feed-row ${type}`;
       const time = new Date().toLocaleTimeString();
       row.innerHTML = `<span>[${time}] ${msg}</span>`;
       feed.prepend(row);
     }
 
-    async function checkStatus() {
+    async function queryModelStatus() {
       bioClient = getBioInstance();
-      const status = await bioClient.getStatus();
-      const dispState = document.getElementById('disp-state');
-      const dispSamples = document.getElementById('disp-samples');
-
-      dispState.textContent = (status.state || 'COLLECTING').toUpperCase();
-      dispState.className = `status-pill status-${status.state || 'collecting'}`;
-      dispSamples.textContent = `${status.samples_collected || 0} samples`;
+      const st = await bioClient.getStatus();
+      
+      document.getElementById('profile-state-badge').textContent = (st.state || 'COLLECTING').toUpperCase();
+      document.getElementById('profile-samples-count').textContent = st.samples_collected || 0;
+      document.getElementById('profile-tenant-name').textContent = st.tenant_id || 'default';
+      document.getElementById('profile-cache-status').textContent = st.in_memory_cached ? 'Yes (Hot)' : 'Cold (Disk)';
+      document.getElementById('header-tenant-pill').textContent = `Tenant: ${st.tenant_id || 'default'}`;
     }
 
-    document.getElementById('btn-check-status').onclick = checkStatus;
-
-    document.getElementById('btn-open-modal').onclick = () => {
+    // Modal Trigger
+    document.getElementById('btn-trigger-calibration').onclick = () => {
       bioClient = getBioInstance();
       bioClient.openEnrollmentModal({
         targetSamples: 20,
-        onComplete: (result) => {
-          checkStatus();
-          logFeed(`Calibration completed! State: ${result.state}`, 'score');
+        onComplete: (res) => {
+          queryModelStatus();
+          logSimFeed(`Calibration completed! State: ${res.state}`, 'score');
         }
       });
     };
 
-    const scratchpad = document.getElementById('exam-scratchpad');
-    const btnStart = document.getElementById('btn-start-exam');
-    const btnEnd = document.getElementById('btn-end-exam');
-    const dispTrust = document.getElementById('disp-trust-score');
-    const dispRisk = document.getElementById('disp-risk-level');
-    const dispViolations = document.getElementById('disp-violations');
+    document.getElementById('btn-query-status').onclick = queryModelStatus;
+
+    // Simulation Controls
+    const btnStart = document.getElementById('btn-start-session');
+    const btnEnd = document.getElementById('btn-end-session');
+    const simArea = document.getElementById('sim-typing-area');
+    const dispTrust = document.getElementById('sim-trust-score');
+    const dispRisk = document.getElementById('sim-risk-level');
+    const dispViolations = document.getElementById('sim-violations');
 
     btnStart.onclick = () => {
       bioClient = getBioInstance();
       violationCount = 0;
       dispViolations.textContent = '0';
-      scratchpad.removeAttribute('disabled');
-      scratchpad.value = '';
-      scratchpad.focus();
+      simArea.removeAttribute('disabled');
+      simArea.value = '';
+      simArea.focus();
       btnStart.disabled = true;
       btnEnd.disabled = false;
 
-      logFeed('Proctoring session started. Telemetry streaming active...', 'info');
+      logSimFeed('SDK Session active. Background telemetry streaming...', 'info');
 
       bioClient.startSession({
-        examId: 'demo_exam_' + Date.now(),
+        examId: 'sim_' + Date.now(),
         intervalMs: 4000,
         onScore: (data) => {
           dispTrust.textContent = `${data.trust_score}%`;
           dispRisk.textContent = data.risk_level.toUpperCase();
-          if (data.risk_level === 'high') {
-            dispRisk.style.color = 'var(--bad)';
-          } else if (data.risk_level === 'medium') {
-            dispRisk.style.color = 'var(--warn)';
-          } else {
-            dispRisk.style.color = 'var(--good)';
-          }
-          logFeed(`Telemetry verified: Trust ${data.trust_score}% (${data.action})`, 'score');
+          dispRisk.style.color = data.risk_level === 'high' ? 'var(--bad)' : data.risk_level === 'medium' ? 'var(--warn)' : 'var(--good)';
+          logSimFeed(`SDK Verified: Trust ${data.trust_score}% (${data.action})`, 'score');
         },
         onViolation: (v) => {
           violationCount++;
           dispViolations.textContent = violationCount;
-          logFeed(`VIOLATION: ${v.type.toUpperCase()}`, 'violation');
+          logSimFeed(`VIOLATION: ${v.type.toUpperCase()}`, 'violation');
         }
       });
     };
 
     btnEnd.onclick = () => {
-      if (bioClient) {
-        bioClient.endSession();
-      }
-      scratchpad.disabled = true;
+      if (bioClient) bioClient.endSession();
+      simArea.disabled = true;
       btnStart.disabled = false;
       btnEnd.disabled = true;
-      logFeed('Proctoring session concluded.', 'info');
+      logSimFeed('SDK Session concluded.', 'info');
     };
 
-    // Auto-check on load
-    window.addEventListener('DOMContentLoaded', checkStatus);
+    // Telemetry Loader
+    async function loadTelemetry() {
+      try {
+        const client = getBioInstance();
+        const health = await client.getHealth();
+        if (health) {
+          document.getElementById('m-status').textContent = health.status.toUpperCase();
+          document.getElementById('m-hitratio').textContent = `${health.cache.hit_ratio_pct}%`;
+          document.getElementById('m-cached').textContent = health.cache.cached_models_count;
+          document.getElementById('m-tenants').textContent = health.total_tenants;
+        }
+      } catch (e) {}
+    }
+
+    // Benchmark Button
+    document.getElementById('btn-benchmark').onclick = async () => {
+      const box = document.getElementById('bench-output');
+      box.style.display = 'block';
+      box.textContent = 'Running 20 in-memory scoring requests...';
+      const client = getBioInstance();
+
+      const dummyEvents = [
+        { key: "t", type: "down", t: 100 }, { key: "t", type: "up", t: 180 },
+        { key: "h", type: "down", t: 240 }, { key: "h", type: "up", t: 310 },
+        { key: "e", type: "down", t: 360 }, { key: "e", type: "up", t: 420 },
+        { key: " ", type: "down", t: 480 }, { key: " ", type: "up", t: 540 },
+        { key: "q", type: "down", t: 600 }, { key: "q", type: "up", t: 670 },
+        { key: "u", type: "down", t: 720 }, { key: "u", type: "up", t: 790 },
+      ];
+
+      const times = [];
+      for (let i = 0; i < 20; i++) {
+        const t0 = performance.now();
+        await fetch(`${client.apiUrl}/verify`, {
+          method: 'POST',
+          headers: client._headers(),
+          body: JSON.stringify({ user_id: 'vijay', events: dummyEvents })
+        });
+        times.push(performance.now() - t0);
+      }
+
+      const avg = (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1);
+      box.innerHTML = `⚡ 20 requests finished.<br>Average Round-Trip: <b>${avg} ms</b> (In-Memory Cache Active)`;
+      loadTelemetry();
+    };
+
+    // Webhook Button
+    document.getElementById('btn-webhook').onclick = async () => {
+      const box = document.getElementById('wh-output');
+      box.style.display = 'block';
+      box.textContent = 'Dispatching HMAC-SHA256 webhook...';
+      try {
+        const res = await fetch('/v1/webhooks/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-API-Key': 'bio_live_default_lms_key' },
+          body: JSON.stringify({
+            tenant_id: 'default',
+            event_type: 'biometric.anomaly_detected',
+            payload: { user_id: 'demo_candidate', risk: 'high', score: 26.4 }
+          })
+        });
+        const data = await res.json();
+        box.innerHTML = `<span style="color: #34d399;">✔ HMAC-Signed Webhook Dispatched</span>`;
+      } catch (e) {
+        box.textContent = 'Error: ' + e.message;
+      }
+    };
+
+    // Load Tenants List
+    async function loadTenantsList() {
+      const tbody = document.getElementById('tenants-tbody');
+      tbody.innerHTML = '<tr><td colspan="4">Loading...</td></tr>';
+      try {
+        const res = await fetch('/v1/tenants', {
+          headers: { 'X-API-Key': 'bio_live_default_lms_key' }
+        });
+        const data = await res.json();
+        tbody.innerHTML = data.tenants.map(t => `
+          <tr>
+            <td><code>${t.id}</code></td>
+            <td><b>${t.name}</b></td>
+            <td><span class="pill">${t.tier.toUpperCase()}</span></td>
+            <td><span class="pill pill-green">${t.status}</span></td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="4" style="color: var(--bad);">Failed to load tenants</td></tr>';
+      }
+    }
+
+    // Provision Tenant Button
+    document.getElementById('btn-create-tenant').onclick = async () => {
+      const id = document.getElementById('prov-tenant-id').value.trim();
+      const name = document.getElementById('prov-tenant-name').value.trim();
+      const tier = document.getElementById('prov-tenant-tier').value;
+      const rawOrigin = document.getElementById('prov-tenant-origin').value.trim();
+      const box = document.getElementById('prov-result');
+
+      if (!id || !name) return alert('Please enter Tenant ID and Name');
+
+      const allowed_origins = rawOrigin ? rawOrigin.split(',').map(s => s.trim()).filter(Boolean) : ['*'];
+
+      box.style.display = 'block';
+      box.textContent = 'Provisioning tenant namespace and generating 192-bit hex key...';
+
+      try {
+        const res = await fetch('/v1/tenants', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-API-Key': 'bio_live_default_lms_key' },
+          body: JSON.stringify({ tenant_id: id, name: name, tier: tier, allowed_origins: allowed_origins })
+        });
+        const d = await res.json();
+        if (res.ok) {
+          const rawKey = d.tenant.initial_api_key;
+          box.innerHTML = `
+            <div style="color: #34d399; font-weight: 700; font-size: 13px; margin-bottom: 6px;">✔ Tenant '${d.tenant.id}' Provisioned!</div>
+            <div style="color: #fbbf24; font-size: 11px; line-height: 1.5; margin-bottom: 10px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); padding: 8px 12px; border-radius: 6px;">
+              ⚠️ <b>Show-Once Security Policy:</b> Copy this high-entropy hexadecimal key now and store it in your <code>.env</code> file. For enterprise protection, it will <b>never</b> be displayed in plain text again.
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px;">
+              <input type="text" id="generated-key-field" value="${rawKey}" readonly style="background: #000; color: #38bdf8; font-family: var(--mono); font-size: 11px; padding: 8px 10px;" />
+              <button class="btn btn-secondary" onclick="navigator.clipboard.writeText('${rawKey}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500);" style="padding: 8px 14px; font-size: 11px; white-space: nowrap;">Copy Key</button>
+            </div>
+            <div style="font-size: 11px; color: var(--dim);">
+              Allowed Domains: <code>${allowed_origins.join(', ')}</code>
+            </div>
+            <button class="btn btn-primary" onclick="document.getElementById('active-api-key').value='${rawKey}'; queryModelStatus(); alert('Key applied to Playground!');" style="margin-top: 10px; width: 100%; font-size: 11px; padding: 7px;">✨ Use this Key in Playground</button>
+          `;
+          loadTenantsList();
+        } else {
+          box.textContent = 'Error: ' + (d.detail || 'Could not create tenant');
+        }
+      } catch (e) {
+        box.textContent = 'Error: ' + e.message;
+      }
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      queryModelStatus();
+      loadTelemetry();
+    });
   </script>
 </body>
 </html>

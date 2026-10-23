@@ -1,0 +1,16 @@
+[
+  {
+    "id": "mem_be83768fdde1b748",
+    "user_id": "usr_210a9d0620adc3e8",
+    "tenant_id": "default",
+    "role": "owner",
+    "joined_at": "2026-09-29T04:46:02.381797+00:00"
+  },
+  {
+    "id": "mem_8743595d566de187",
+    "user_id": "usr_812373e6d882c95d",
+    "tenant_id": "acme-university",
+    "role": "owner",
+    "joined_at": "2026-10-07T03:43:51.689633+00:00"
+  }
+]

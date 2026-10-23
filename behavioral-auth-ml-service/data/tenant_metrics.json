@@ -1,0 +1,14 @@
+{
+  "default": {
+    "total_verifications": 104,
+    "total_enrollments": 0,
+    "anomalies_flagged": 27,
+    "last_active": "2026-10-08T08:58:12.944779+00:00"
+  },
+  "demo": {
+    "total_verifications": 0,
+    "total_enrollments": 0,
+    "anomalies_flagged": 0,
+    "last_active": "2026-09-28T16:36:03.689111+00:00"
+  }
+}

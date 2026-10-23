@@ -1,0 +1,92 @@
+name: biometrics-authentication
+
+services:
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    volumes:
+      - mongo7-data:/data/db
+    healthcheck:
+      test: [CMD, mongosh, --quiet, --eval, "quit(db.adminCommand('ping').ok ? 0 : 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  ml:
+    pull_policy: build
+    build:
+      context: .
+      dockerfile: behavioral-auth-ml-service/Dockerfile
+    restart: unless-stopped
+    environment:
+      DEMO_SEED: "true"
+      MONGO_URI: mongodb://mongo:27017/lms_demo
+    ports:
+      - "127.0.0.1:${ML_PORT:-8000}:8000"
+    volumes:
+      - ml-data:/app/behavioral-auth-ml-service/data
+      - ml-models:/app/behavioral-auth-ml-service/models
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/system/health', timeout=4)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  backend:
+    pull_policy: build
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      DEMO_SEED: "true"
+      NODE_ENV: production
+      PORT: 5000
+      MONGO_URI: mongodb://mongo:27017/lms_demo
+      BEHAVIOR_API_URL: http://ml:8000
+      JWT_SECRET: ${JWT_SECRET:-}
+    volumes:
+      - backend-runtime:/app/runtime
+    depends_on:
+      mongo:
+        condition: service_healthy
+      ml:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:5000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  frontend:
+    pull_policy: build
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+      ml:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1:8080/healthz]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+volumes:
+  mongo7-data:
+  mongo-data:
+  ml-data:
+  ml-models:
+  backend-runtime:

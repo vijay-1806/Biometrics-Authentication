@@ -2,8 +2,8 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 // Helper to generate JWT token
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'supersecretlmskey12345', {
+const generateToken = (id, sessionId) => {
+  return jwt.sign({ id, ...(sessionId ? { sessionId } : {}) }, process.env.JWT_SECRET || 'supersecretlmskey12345', {
     expiresIn: '30d',
   });
 };
@@ -13,7 +13,7 @@ const generateToken = (id) => {
 // @access  Public
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'Please enter all fields' });
@@ -27,11 +27,16 @@ const registerUser = async (req, res) => {
     }
 
     // Create user
+    const sessionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
     const user = await User.create({
       name,
       email,
       password,
-      role: role || 'student', // Default to student
+      sessionId,
+      lastActiveAt: new Date(),
+      // Public sign-up is always a learner account. Staff roles are granted
+      // through an administrator managed process, never a client form field.
+      role: 'student',
     });
 
     if (user) {
@@ -40,7 +45,7 @@ const registerUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        token: generateToken(user._id),
+        token: generateToken(user._id, sessionId),
       });
     } else {
       res.status(400).json({ message: 'Invalid user data' });
@@ -72,12 +77,15 @@ const loginUser = async (req, res) => {
     }).select('+password');
 
     if (user && (await user.matchPassword(password))) {
+      const sessionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+      await User.findByIdAndUpdate(user._id, { sessionId, lastActiveAt: new Date() });
+
       res.json({
         _id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
-        token: generateToken(user._id),
+        token: generateToken(user._id, sessionId),
       });
     } else {
       res.status(401).json({ message: 'Invalid username/email or password' });
@@ -111,8 +119,24 @@ const getUserProfile = async (req, res) => {
   }
 };
 
+const updateUserProfile = async (req, res) => {
+  try {
+    const name = String(req.body.name || '').trim();
+    if (name.length < 2 || name.length > 80) return res.status(400).json({ message: 'Name must be between 2 and 80 characters.' });
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    user.name = name;
+    await user.save();
+    res.json({ _id: user._id, name: user.name, email: user.email, role: user.role });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Could not update your name.' });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
   getUserProfile,
+  updateUserProfile,
 };

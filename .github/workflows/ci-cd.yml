@@ -1,0 +1,248 @@
+name: CI / CD
+
+on:
+  push:
+    branches: [main, release/v1.2]
+  pull_request:
+    branches: [main, release/v1.2]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  compile:
+    name: Build frontend and compile/check source
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    outputs:
+      repository: ${{ steps.release.outputs.repository }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend --legacy-peer-deps --no-audit --no-fund
+      - name: Compile React production bundle
+        run: npm run build --prefix frontend
+      - name: Check Node.js source syntax
+        run: find backend/src backend/scripts docker scripts -type f \( -name '*.js' -o -name '*.cjs' \) -print0 | xargs -0 -r -n1 node --check
+      - name: Compile Python source
+        run: python -m compileall -q behavioral-auth-ml-service/backend
+      - name: Validate Compose and deployment scripts
+        run: |
+          docker compose config --quiet
+          for script in scripts/deploy.sh scripts/deploy-ssh.sh; do bash -n "$script"; done
+      - name: Test deployment failure handling and rollback
+        run: python scripts/test_deploy.py
+      - name: Set repository image namespace
+        id: release
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: echo "repository=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: frontend-production-bundle
+          path: frontend/dist/
+          retention-days: 7
+
+  build:
+    name: Build ${{ matrix.service }} container
+    needs: compile
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: frontend
+            dockerfile: frontend/Dockerfile
+          - service: backend
+            dockerfile: backend/Dockerfile
+          - service: ml
+            dockerfile: behavioral-auth-ml-service/Dockerfile
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Build image once for testing and publishing
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          load: true
+          platforms: linux/amd64
+          tags: biometrics-ci/${{ matrix.service }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+      - name: Export image
+        env:
+          SERVICE: ${{ matrix.service }}
+          REVISION: ${{ github.sha }}
+        run: docker save "biometrics-ci/$SERVICE:$REVISION" -o "$RUNNER_TEMP/$SERVICE.tar"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: container-${{ matrix.service }}
+          path: ${{ runner.temp }}/${{ matrix.service }}.tar
+          retention-days: 2
+          compression-level: 1
+
+  test:
+    # MongoDB 8 cannot start on the 6.19-7.0.13 kernels used by some newer images.
+    name: Integration and persistence tests
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      IMAGE_TAG: ${{ github.sha }}
+      COMPOSE_FILE: docker-compose.yml:docker-compose.ci.yml
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: container-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/images
+      - name: Load built images
+        run: for image in "$RUNNER_TEMP"/images/*.tar; do docker load -i "$image"; done
+      - name: Install smoke-test client
+        run: npm ci --prefix frontend --legacy-peer-deps --no-audit --no-fund
+      - name: Start the exact built images
+        run: docker compose up --no-build --detach --wait --wait-timeout 240
+      - name: Test authentication, WebSockets, SDK, and biometric enrollment
+        run: node scripts/smoke-test.cjs
+      - name: Test saved demo accounts, courses, and trained model inference
+        run: |
+          node scripts/demo-smoke-test.cjs
+          docker compose exec -T backend node scripts/test-seed-demo.js
+      - name: Test customer workspaces and tenant access
+        run: docker compose exec -T ml python behavioral-auth-ml-service/backend/test_saas_platform.py
+      - name: Recreate containers and test persistent state
+        run: |
+          docker compose up --no-build --detach --force-recreate --wait --wait-timeout 180 backend ml frontend
+          node scripts/smoke-test.cjs --persistence
+          node scripts/demo-smoke-test.cjs
+      - name: Capture diagnostics
+        if: always()
+        run: |
+          mkdir -p artifacts
+          docker compose ps --all > artifacts/compose-status.txt
+          docker compose logs --no-color > artifacts/compose.log 2>&1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: compose-diagnostics
+          path: artifacts/
+          retention-days: 7
+      - name: Clean up test stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans
+
+  publish:
+    name: Publish tested images and release bundle
+    needs: [compile, test]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_REPOSITORY: ${{ needs.compile.outputs.repository }}
+      REVISION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: container-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/images
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push tested images and record immutable image digests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          printf 'RELEASE_SHA=%s\n' "$REVISION" > release/release.env
+          for service in frontend backend ml; do
+            docker load -i "$RUNNER_TEMP/images/$service.tar"
+            image="$IMAGE_REPOSITORY-$service"
+            docker tag "biometrics-ci/$service:$REVISION" "$image:sha-$REVISION"
+            docker push "$image:sha-$REVISION"
+            digest=$(docker image inspect "$image:sha-$REVISION" --format '{{index .RepoDigests 0}}')
+            printf '%s_IMAGE=%s\n' "${service^^}" "$digest" >> release/release.env
+          done
+          # Advance the friendly tags only after every SHA image has been pushed.
+          for service in frontend backend ml; do
+            docker tag "$IMAGE_REPOSITORY-$service:sha-$REVISION" "$IMAGE_REPOSITORY-$service:1.2"
+            docker push "$IMAGE_REPOSITORY-$service:1.2"
+          done
+          cp docker-compose.deploy.yml release/compose.yml
+          cp scripts/deploy.sh release/deploy.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: deployment-bundle
+          path: release/
+          retention-days: 30
+
+  deploy:
+    name: Deploy to production and check health
+    needs: publish
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: ${{ vars.DEPLOY_URL }}
+    concurrency:
+      group: biometrics-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: deployment-bundle
+          path: release/
+      - name: Transfer release and deploy through SSH
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REVISION: ${{ github.sha }}
+          DEPLOYMENT_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: bash scripts/deploy-ssh.sh release
+      - name: Check public application endpoints
+        if: vars.DEPLOY_URL != ''
+        env:
+          DEPLOY_URL: ${{ vars.DEPLOY_URL }}
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 5 "${DEPLOY_URL%/}/api/health"
+          curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 5 "${DEPLOY_URL%/}/bio-api/v1/system/health"

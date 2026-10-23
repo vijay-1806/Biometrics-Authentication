@@ -10,7 +10,7 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
   useEffect(() => {
     if (!user || !token) return;
 
-    const isExam = context === 'exam' || context === 'quiz' || Boolean(examId);
+    const isExam = context === 'exam' || context === 'quiz';
     if (!isExam) return;
 
     // Toast banner to warn students on violations during exams
@@ -55,11 +55,13 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
     // Forward telemetry & results to LMS proctoring backend so the teacher dashboard updates
     const syncWithProctor = async (payload) => {
       try {
+        const assessmentSessionId = sessionStorage.getItem(`assessment-session:${examId}`);
         await axios.post(
           '/api/behavior/score',
           {
             examId,
             studentId: user._id,
+            session: assessmentSessionId || undefined,
             events: payload.events || [],
             ...payload
           },
@@ -112,6 +114,8 @@ export const useBehaviorTracking = (context = 'general', examId = null) => {
         let fakeEvents = [];
 
         if (violation.type === 'tab_switch') {
+          // Never show a departure warning while the LMS page still has focus.
+          if (!document.hidden && document.hasFocus()) return;
           msg = 'Tab or Window Switch Detected! This event is logged by proctor.';
           alertType = 'tab_switch';
           fakeEvents = [{ type: 'visibilitychange', hidden: true, timestamp: Date.now() }];

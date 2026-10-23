@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +20,8 @@ import {
 
 const QuizPage = () => {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const queryPin = searchParams.get('pin') || '';
   const navigate = useNavigate();
   const { user } = useAuth();
   
@@ -31,6 +33,8 @@ const QuizPage = () => {
   const [inSession, setInSession] = useState(false);
   const [sessionPinInput, setSessionPinInput] = useState('');
   const [waitingForStart, setWaitingForStart] = useState(false);
+  const [examActive, setExamActive] = useState(false);
+  const [sessionEndsAt, setSessionEndsAt] = useState(null);
   const [sessionError, setSessionError] = useState('');
   const socketRef = useRef(null);
 
@@ -41,7 +45,7 @@ const QuizPage = () => {
   // never fired at all, for any quiz, regardless of whether it was being
   // live-monitored. The thing that actually matters is whether the student
   // is in an active live-proctored session (inSession), so drive it off that.
-  const trackingContext = (inSession || quiz?.isExam) ? 'exam' : 'quiz';
+  const trackingContext = examActive ? 'exam' : 'idle';
   useBehaviorTracking(trackingContext, id);
   
   // Quiz taking state
@@ -59,6 +63,13 @@ const QuizPage = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   
   const timerRef = useRef(null);
+  const submissionStartedRef = useRef(false);
+  const joinAttemptRef = useRef(null);
+  const selectedAnswersRef = useRef(selectedAnswers);
+  const quizCompletedRef = useRef(quizCompleted);
+  const submitAnswersRef = useRef(null);
+  selectedAnswersRef.current = selectedAnswers;
+  quizCompletedRef.current = quizCompleted;
 
   const fetchQuizData = async () => {
     try {
@@ -66,9 +77,11 @@ const QuizPage = () => {
       const res = await axios.get(`/api/quizzes/${id}`);
       setQuiz(res.data);
       setQuestions(res.data.questions || []);
-      setTimeRemaining((res.data.durationMinutes || 30) * 60);
+      if (!res.data.isExam) setTimeRemaining((res.data.durationMinutes || 30) * 60);
+      if (res.data.sessionEndsAt) setSessionEndsAt(res.data.sessionEndsAt);
     } catch (err) {
       console.error(err);
+      setSessionError(err.response?.data?.message || 'The assessment could not be loaded. Your saved answers are still on this device.');
     } finally {
       setLoading(false);
     }
@@ -79,44 +92,94 @@ const QuizPage = () => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (socketRef.current) socketRef.current.disconnect();
+      socketRef.current = null;
+      joinAttemptRef.current = null;
     };
   }, [id]);
 
-  const handleJoinSession = () => {
-    if (!sessionPinInput) return;
+  useEffect(() => {
+    const draftKey = `quiz-draft:${id}:${user?._id}`;
+    try {
+      const draft = JSON.parse(localStorage.getItem(draftKey) || 'null');
+      if (draft) {
+        setSelectedAnswers(draft.answers || {});
+        setFlaggedQuestions(draft.flagged || {});
+      }
+    } catch { localStorage.removeItem(draftKey); }
+    const savedPin = sessionStorage.getItem(`quiz-pin:${id}`);
+    const pinToRestore = queryPin || savedPin;
+    if (pinToRestore && user?._id) {
+      setSessionPinInput(pinToRestore);
+      handleJoinSession(pinToRestore);
+    }
+  }, [id, user?._id, queryPin]);
+
+  useEffect(() => {
+    if (!user?._id) return;
+    localStorage.setItem(`quiz-draft:${id}:${user._id}`, JSON.stringify({ answers: selectedAnswers, flagged: flaggedQuestions, savedAt: Date.now() }));
+  }, [id, user?._id, selectedAnswers, flaggedQuestions]);
+
+  const handleJoinSession = (requestedPin = sessionPinInput) => {
+    if (!requestedPin || !user?._id) return;
+    if (joinAttemptRef.current === requestedPin && socketRef.current) return;
+    if (socketRef.current) socketRef.current.disconnect();
+    joinAttemptRef.current = requestedPin;
     setSessionError('');
     
-    const socketHost = typeof window !== 'undefined' ? `http://${window.location.hostname}:5000` : 'http://localhost:5000';
-    socketRef.current = io(socketHost, { transports: ['websocket'] });
+    const socketHost = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000';
+    socketRef.current = io(socketHost, { transports: ['websocket', 'polling'], auth: { token: localStorage.getItem('token') } });
     const socket = socketRef.current;
     
-    socket.emit('join-session', { pin: sessionPinInput, student: { id: user._id, name: user.name, email: user.email } });
+    socket.emit('join-session', { pin: requestedPin });
     
-    socket.on('join-success', () => {
+    socket.on('join-success', (sessionInfo = {}) => {
       setInSession(true);
       setWaitingForStart(true);
+      sessionStorage.setItem(`quiz-pin:${id}`, requestedPin);
+      if (sessionInfo.assessmentSessionId) sessionStorage.setItem(`assessment-session:${id}`, sessionInfo.assessmentSessionId);
     });
     
-    socket.on('exam-started', () => {
+    socket.on('exam-started', (sessionInfo = {}) => {
       setInSession(true);
       setWaitingForStart(false);
+      setExamActive(true);
+      setSessionEndsAt(sessionInfo.endsAt || null);
+      if (sessionInfo.assessmentSessionId) sessionStorage.setItem(`assessment-session:${id}`, sessionInfo.assessmentSessionId);
+      sessionStorage.setItem(`quiz-pin:${id}`, requestedPin);
+      if (sessionInfo.endsAt) setTimeRemaining(Math.max(0, Math.ceil((new Date(sessionInfo.endsAt).getTime() - Date.now()) / 1000)));
       window.dispatchEvent(new Event('exam-session-reset'));
+      fetchQuizData();
     });
     
     socket.on('join-error', (msg) => {
       setSessionError(msg);
       socket.disconnect();
+      socketRef.current = null;
+      joinAttemptRef.current = null;
     });
-    
+
     socket.on('session-ended', () => {
-      // Force submit if teacher ends session
-      handleAutoSubmit();
+      setExamActive(false);
+      setInSession(false);
+      setWaitingForStart(false);
+      sessionStorage.removeItem(`quiz-pin:${id}`);
+      sessionStorage.removeItem(`assessment-session:${id}`);
+      if (!submissionStartedRef.current && !quizCompletedRef.current) submitAnswersRef.current?.();
+    });
+    socket.on('connect_error', () => {
+      joinAttemptRef.current = null;
+      socketRef.current = null;
+      setSessionError('Could not connect to the secure exam room. Check your connection and retry.');
+    });
+    socket.on('session-reconnected', () => {
+      setSessionError('This account continued the assessment in another tab. This view is read-only.');
+      socket.disconnect();
     });
   };
 
   // Timer loop
   useEffect(() => {
-    if (loading || quizCompleted || timeRemaining <= 0) return;
+    if (loading || quizCompleted || !quiz || (quiz.isExam && !examActive) || timeRemaining <= 0) return;
 
     timerRef.current = setInterval(() => {
       setTimeRemaining(prev => {
@@ -130,7 +193,24 @@ const QuizPage = () => {
     }, 1000);
 
     return () => clearInterval(timerRef.current);
-  }, [loading, quizCompleted, timeRemaining]);
+  }, [loading, quizCompleted, timeRemaining, quiz, examActive]);
+
+  useEffect(() => {
+    if (quiz?.isExam && examActive && sessionEndsAt) {
+      setTimeRemaining(Math.max(0, Math.ceil((new Date(sessionEndsAt).getTime() - Date.now()) / 1000)));
+    }
+  }, [quiz?.isExam, examActive, sessionEndsAt]);
+
+  useEffect(() => {
+    if (!examActive || quizCompleted) return undefined;
+    const warnBeforeLeaving = (event) => {
+      event.preventDefault();
+      event.returnValue = 'Your proctored assessment is in progress. Your saved answers will be restored when you reconnect.';
+      return event.returnValue;
+    };
+    window.addEventListener('beforeunload', warnBeforeLeaving);
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+  }, [examActive, quizCompleted]);
 
   const handleOptionSelect = (optionIdx) => {
     setSelectedAnswers(prev => ({
@@ -160,23 +240,26 @@ const QuizPage = () => {
   };
 
   const handleAutoSubmit = () => {
-    alert('Time has expired! Your quiz will be automatically submitted.');
+    if (submitting || quizCompleted) return;
     submitAnswers();
   };
 
   const submitAnswers = async () => {
+    if (submissionStartedRef.current || quizCompleted) return;
+    submissionStartedRef.current = true;
     setShowConfirmModal(false);
     setSubmitting(true);
     
     // Map selectedAnswers state to the backend format: [{ questionIndex, selectedAnswerIndex }]
-    const formattedAnswers = Object.entries(selectedAnswers).map(([qIdx, optIdx]) => ({
+    const latestAnswers = selectedAnswersRef.current;
+    const formattedAnswers = Object.entries(latestAnswers).map(([qIdx, optIdx]) => ({
       questionIndex: parseInt(qIdx),
       selectedAnswerIndex: optIdx
     }));
 
     // Ensure unanswered questions are represented
     questions.forEach((_, idx) => {
-      if (selectedAnswers[idx] === undefined) {
+      if (latestAnswers[idx] === undefined) {
         formattedAnswers.push({
           questionIndex: idx,
           selectedAnswerIndex: -1
@@ -189,14 +272,19 @@ const QuizPage = () => {
       setGradedResult(res.data.result);
       setCorrectAnswersList(res.data.correctAnswers || []);
       setQuizCompleted(true);
+      localStorage.removeItem(`quiz-draft:${id}:${user._id}`);
+      sessionStorage.removeItem(`quiz-pin:${id}`);
+      sessionStorage.removeItem(`assessment-session:${id}`);
       if (timerRef.current) clearInterval(timerRef.current);
     } catch (err) {
       console.error(err);
-      alert('Failed to submit quiz. Please try again.');
+      submissionStartedRef.current = false;
+      setSessionError(err.response?.data?.message || 'Your submission could not be saved yet. Keep this tab open and retry.');
     } finally {
       setSubmitting(false);
     }
   };
+  submitAnswersRef.current = submitAnswers;
 
   if (loading) {
     return (
@@ -206,6 +294,10 @@ const QuizPage = () => {
         </div>
       </Layout>
     );
+  }
+
+  if (!quiz) {
+    return <Layout><div className="mx-auto mt-12 max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center"><h2 className="text-lg font-bold text-slate-900">Assessment unavailable</h2><p className="my-3 text-sm text-slate-500">{sessionError || 'This assessment may have been moved or removed.'}</p><button onClick={fetchQuizData} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Try again</button></div></Layout>;
   }
 
   // Pre-quiz Waiting Room (if it's an exam, require live session)

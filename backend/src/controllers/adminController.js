@@ -1,7 +1,6 @@
 const User = require('../models/User');
 const Course = require('../models/Course');
 const Assignment = require('../models/Assignment');
-const Quiz = require('../models/Quiz');
 
 // @desc    Get Admin dashboard stats
 // @route   GET /api/admin/stats
@@ -14,7 +13,6 @@ const getAdminStats = async (req, res) => {
     const adminsCount = await User.countDocuments({ role: 'admin' });
     const coursesCount = await Course.countDocuments();
     const assignmentsCount = await Assignment.countDocuments();
-    const quizzesCount = await Quiz.countDocuments();
 
     res.json({
       totalUsers,
@@ -23,7 +21,6 @@ const getAdminStats = async (req, res) => {
       adminsCount,
       coursesCount,
       assignmentsCount,
-      quizzesCount,
     });
   } catch (error) {
     console.error(error);
