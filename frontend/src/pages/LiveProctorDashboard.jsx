@@ -326,7 +326,7 @@ export default function LiveProctorDashboard() {
 
   useEffect(() => {
     if (sessionPin) {
-      const socketHost = `http://${window.location.hostname}:5000`;
+      const socketHost = window.location.origin;
       socketRef.current = io(socketHost, { transports: ['websocket', 'polling'], auth: { token: localStorage.getItem('token') } });
       const socket = socketRef.current;
 

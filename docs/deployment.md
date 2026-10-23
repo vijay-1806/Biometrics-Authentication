@@ -133,7 +133,9 @@ Set `IMAGE_TAG=sha-<full-commit-sha>` in `.env` to select a revision for all thr
 
 ## Before public hosting
 
-The provided Compose ports listen on localhost. Place a TLS reverse proxy in front of the application, configure access to the separate BioAuth console deliberately, and restrict administrative routes.
+The local demo Compose ports listen on all host interfaces so devices on the same LAN can connect on ports 8080 and 8000. Set `HOST_BIND=127.0.0.1` for local-only access. Private LAN addresses require the same network and permitted firewall/device-to-device traffic.
+
+The production manifest continues to listen on localhost. Place a TLS reverse proxy in front of a public deployment, configure access to the separate BioAuth console deliberately, and restrict administrative routes.
 
 The application currently bootstraps demonstration BioAuth accounts and an integration key. Replace these before external use; changing only the Node JWT secret does not change them. Configure the Node server's `BEHAVIOR_API_KEY` and rebuild the frontend with its matching `VITE_BIO_API_KEY` when replacing the LMS integration key. Review the service's origin and API-key authorization policies as part of deployment.
 

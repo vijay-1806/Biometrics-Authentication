@@ -127,7 +127,9 @@ Copy `.env.example` to `.env` only if you want to change defaults:
 
 Containers generate a random JWT signing key on first startup and keep it in the `backend-runtime` volume. Changing it invalidates existing LMS tokens.
 
-Both published ports bind to `127.0.0.1`; the database and Node API stay inside Docker's network. A public deployment needs a hosting target, HTTPS, deliberate access controls, and replacement of the demonstration accounts and integration key. See [security](docs/security.md) and [deployment notes](docs/deployment.md).
+Both local demo ports bind to `0.0.0.0`, allowing friends on the same LAN to connect. With the stack running, find your Wi-Fi/Ethernet IP using `hostname -I`; your friend opens `http://YOUR_LAN_IP:8080` for LMS or `http://YOUR_LAN_IP:8000` for BioAuth. The host firewall must allow these ports, and the network must allow communication between devices. A private LAN IP does not provide access from another network. Use a trusted network because the demo credentials are documented above. Set `HOST_BIND=127.0.0.1` in `.env` to restrict access to this computer.
+
+The database and Node API stay inside Docker's network. The separate production manifest still binds published ports to localhost. A public deployment needs a hosting target, HTTPS, deliberate access controls, and replacement of the demonstration accounts and integration key. See [security](docs/security.md) and [deployment notes](docs/deployment.md).
 
 ## How it works
 

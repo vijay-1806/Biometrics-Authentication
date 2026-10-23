@@ -23,7 +23,7 @@ services:
       DEMO_SEED: "true"
       MONGO_URI: mongodb://mongo:27017/lms_demo
     ports:
-      - "127.0.0.1:${ML_PORT:-8000}:8000"
+      - "${HOST_BIND:-0.0.0.0}:${ML_PORT:-8000}:8000"
     volumes:
       - ml-data:/app/behavioral-auth-ml-service/data
       - ml-models:/app/behavioral-auth-ml-service/models
@@ -71,7 +71,7 @@ services:
       dockerfile: frontend/Dockerfile
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${APP_PORT:-8080}:8080"
+      - "${HOST_BIND:-0.0.0.0}:${APP_PORT:-8080}:8080"
     depends_on:
       backend:
         condition: service_healthy
