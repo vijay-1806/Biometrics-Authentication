@@ -2,10 +2,10 @@ name: biometrics-authentication
 
 services:
   mongo:
-    image: mongo:8.0
+    image: mongo:7.0
     restart: unless-stopped
     volumes:
-      - mongo-data:/data/db
+      - mongo7-data:/data/db
     healthcheck:
       test: [CMD, mongosh, --quiet, --eval, "quit(db.adminCommand('ping').ok ? 0 : 1)"]
       interval: 10s
@@ -14,11 +14,13 @@ services:
       start_period: 20s
 
   ml:
+    pull_policy: build
     build:
       context: .
       dockerfile: behavioral-auth-ml-service/Dockerfile
     restart: unless-stopped
     environment:
+      DEMO_SEED: "true"
       MONGO_URI: mongodb://mongo:27017/lms_demo
     ports:
       - "127.0.0.1:${ML_PORT:-8000}:8000"
@@ -36,11 +38,13 @@ services:
       start_period: 30s
 
   backend:
+    pull_policy: build
     build:
       context: .
       dockerfile: backend/Dockerfile
     restart: unless-stopped
     environment:
+      DEMO_SEED: "true"
       NODE_ENV: production
       PORT: 5000
       MONGO_URI: mongodb://mongo:27017/lms_demo
@@ -61,6 +65,7 @@ services:
       start_period: 20s
 
   frontend:
+    pull_policy: build
     build:
       context: .
       dockerfile: frontend/Dockerfile
@@ -80,6 +85,7 @@ services:
       start_period: 10s
 
 volumes:
+  mongo7-data:
   mongo-data:
   ml-data:
   ml-models:

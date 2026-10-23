@@ -6,11 +6,11 @@
 
 A behavioural biometrics platform paired with **LuminaLMS**: live assessments, coding practice, and continuous identity signals in one project.
 
-[![CI / CD](https://github.com/vijay-1806/Biometrics-Authentication/actions/workflows/ci-cd.yml/badge.svg?branch=release%2Fv1.2)](https://github.com/vijay-1806/Biometrics-Authentication/actions/workflows/ci-cd.yml)
+[![CI / CD](https://github.com/vijay-1806/Biometrics-Authentication/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/vijay-1806/Biometrics-Authentication/actions/workflows/ci-cd.yml)
 ![React](https://img.shields.io/badge/React-19-149eca?logo=react)
 ![Node.js](https://img.shields.io/badge/Node.js-22-339933?logo=nodedotjs&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Python-009688?logo=fastapi&logoColor=white)
-![MongoDB](https://img.shields.io/badge/MongoDB-8-47A248?logo=mongodb&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-7-47A248?logo=mongodb&logoColor=white)
 ![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
 [Quick start](#quick-start) · [How it works](#how-it-works) · [CI / CD](#ci--cd) · [Documentation](#documentation)
@@ -37,20 +37,20 @@ This repository contains both the **learning application** and the **Biometrics-
 
 **Requirements:** Git and Docker with Docker Compose v2.20 or newer. Start Docker Desktop or your Docker Engine first. Internet access is needed for the first build.
 
-Clone the completed release branch:
+Clone the main branch:
 
 ```bash
-git clone --branch release/v1.2 --single-branch https://github.com/vijay-1806/Biometrics-Authentication.git
+git clone --branch main --single-branch https://github.com/vijay-1806/Biometrics-Authentication.git
 cd Biometrics-Authentication
 ```
 
 **Start the whole project with one command:**
 
 ```bash
-docker compose up --build -d --wait
+docker compose up
 ```
 
-No local Node.js, Python, MongoDB, manual database import, or environment-file setup is required. The first build downloads dependencies and can take a few minutes.
+No local Node.js, Python, MongoDB, manual database import, or environment-file setup is required. Compose builds the current source (using cached layers on later starts), starts MongoDB 7, and automatically installs the saved demo accounts, courses, assignments, quizzes, and trained student models. The first build can take a few minutes. Keep the terminal open; Ctrl+C stops the stack. For background operation, use `docker compose up -d --wait`. Your user needs Docker access; use `sudo docker compose up` if your Linux Docker socket requires it.
 
 | Open | Address |
 | --- | --- |
@@ -61,9 +61,33 @@ No local Node.js, Python, MongoDB, manual database import, or environment-file s
 | LMS readiness | [http://localhost:8080/api/health](http://localhost:8080/api/health) |
 | ML health through the app | [http://localhost:8080/bio-api/v1/system/health](http://localhost:8080/bio-api/v1/system/health) |
 
-Create a student account in the LMS. Each installation starts with an empty learning database and fresh biometric storage; repository exports, personal profiles, and trained models are excluded from Docker images.
+### Saved demo accounts and models
 
-The BioAuth console is a separate application with its own accounts. Its existing bootstrap logins are `admin@bioauth.service` and `vijay@bioauth.io`, both with password `BioAuth@2026!`. These are local demonstration credentials. Change them in the console before exposing the service. The LMS integration uses the existing development key `bio_live_default_lms_key`.
+The first startup restores the 3 saved courses, 2 assignments, 3 quizzes, their linked LMS records, and the trained Vijay, Ragavan, and Sarvanth biometric models. Original account IDs and course enrollments are retained. Restarts preserve changed passwords, course edits, and retrained models.
+
+**LMS — http://localhost:8080**
+
+| Email | Password | Role |
+| --- | --- | --- |
+| `admin@gmail.com` | `LmsAdmin@2026!` | Administrator |
+| `teacher@gmail.com` | `password123` | Teacher, with the saved Git and Python courses |
+| `teacher-01@gmail.com` | `password123` | Teacher, with the saved NS course |
+| `student@gmail.com` | `password123` | Legacy teacher account |
+| `vijay@gmail.com` | `123456` | Student, trained profile |
+| `sarvanth@gmail.com` | `123456` | Student, trained profile |
+| `ragavan@gmail.com` | `123456` | Student, trained profile |
+
+**BioAuth console/API — http://localhost:8000** (separate accounts)
+
+| Email | Password | Access |
+| --- | --- | --- |
+| `admin@bioauth.service` | `BioAuth@2026!` | Platform administrator |
+| `vijay@bioauth.io` | `BioAuth@2026!` | LMS workspace owner |
+| `vijay@gmail.com` | `DemoStudent@2026!` | Demo workspace viewer |
+| `sarvanth@gmail.com` | `DemoStudent@2026!` | Demo workspace viewer |
+| `ragavan@gmail.com` | `DemoStudent@2026!` | Demo workspace viewer |
+
+The LMS SDK uses the development key `bio_live_default_lms_key`. These are local demonstration credentials. Change them before exposing the service. Existing accounts with changed passwords are preserved. A previously imported LMS admin using the exact archived password hash is assigned the documented demo password once during bootstrap.
 
 ### Create a teacher or LMS administrator
 
@@ -132,7 +156,7 @@ Docker Compose waits for dependencies to report healthy. Named volumes preserve 
 
 ## CI / CD
 
-The [GitHub Actions workflow](.github/workflows/ci-cd.yml) runs for pull requests and pushes targeting **`release/v1.2`**.
+The [GitHub Actions workflow](.github/workflows/ci-cd.yml) runs for pull requests and pushes targeting **`main` and `release/v1.2`**. Successful `main` pushes publish images and can deploy when configured; release-branch pushes run validation only.
 
 ```mermaid
 flowchart LR
@@ -154,7 +178,7 @@ flowchart LR
 | **Publish** | Push the tested images to GHCR without rebuilding. Create a deployment bundle pinned to image digests. |
 | **Deploy** | Transfer the bundle over verified SSH, pull images, update Docker Compose, check health, and restore the previous release on rollout failure. Optionally check the public application URL too. |
 
-Pull requests stop after testing. Release-branch pushes continue to publishing and, once configured, deployment. Failed integration runs upload Compose logs for diagnosis. Production deployment is serialized to prevent overlapping updates.
+Pull requests stop after testing. Main-branch pushes continue to publishing and, once configured, deployment. Failed integration runs upload Compose logs for diagnosis. Production deployment is serialized to prevent overlapping updates.
 
 Images are published under `ghcr.io/vijay-1806/biometrics-authentication-{frontend,backend,ml}`, with `1.2` and `sha-<full-commit-sha>` tags. The deployment bundle uses immutable **digest references**, so production receives the images that passed the tests. Images target Linux amd64.
 
@@ -165,7 +189,7 @@ The deploy job is implemented for a Linux server reached over SSH, including AWS
 1. Prepare a Linux amd64 server with Docker Engine, Compose v2.20+, Bash, and `flock`. The SSH user must be able to run Docker.
 2. In GitHub repository **Settings → Environments**, create `production` and add secrets `DEPLOY_SSH_KEY` and `DEPLOY_KNOWN_HOSTS` (verified host-key entries).
 3. Under **Settings → Secrets and variables → Actions → Variables**, set `DEPLOY_HOST`, `DEPLOY_USER`, optional `DEPLOY_PORT` (default `22`), and optional `DEPLOY_URL` (your HTTPS app URL).
-4. Set the repository variable `DEPLOY_ENABLED=true` after the host and secrets are ready, then push to `release/v1.2`.
+4. Set the repository variable `DEPLOY_ENABLED=true` after the host and secrets are ready, then push to `main`.
 
 The pipeline uses its temporary `GITHUB_TOKEN` to pull even private GHCR images on the server. No Docker Hub credentials or long-lived GHCR token are required. SSH credentials are kept out of release artifacts, and the temporary registry login is removed after deployment.
 
@@ -185,7 +209,7 @@ For a reproducible release or rollback, set `IMAGE_TAG=sha-<full-commit-sha>` in
 
 ## Develop without Docker
 
-Install Node.js 22, Python 3.11, and MongoDB 8. Start MongoDB locally at `mongodb://localhost:27017/lms_demo`.
+Install Node.js 22, Python 3.11, and MongoDB 7. Start MongoDB locally at `mongodb://localhost:27017/lms_demo`.
 
 ```bash
 npm ci
@@ -210,6 +234,7 @@ Against a fresh Docker stack, with Node.js 22 installed:
 ```bash
 npm ci --prefix frontend --legacy-peer-deps
 node scripts/smoke-test.cjs
+node scripts/demo-smoke-test.cjs
 docker compose exec -T ml python behavioral-auth-ml-service/backend/test_saas_platform.py
 docker compose up -d --force-recreate --wait backend ml frontend
 node scripts/smoke-test.cjs --persistence
@@ -229,7 +254,7 @@ behavioral-auth-ml-service/
 docker/                          Nginx configuration and backend startup
 docs/                            Architecture, security, deployment, and demo guides
 scripts/                         Development helpers and integration smoke test
-docker-compose.yml               Complete source-build stack
+docker-compose.yml               One-command demo stack with saved data and models
 docker-compose.registry.yml      Optional published-image overlay
 docker-compose.deploy.yml        Digest-pinned server deployment manifest
 ```
@@ -242,7 +267,7 @@ docker-compose.deploy.yml        Digest-pinned server deployment manifest
 | Port 8080 or 8000 is occupied | Change `APP_PORT` or `ML_PORT` in `.env`, then rerun Compose. |
 | MongoDB logs mention an incompatible kernel | See the [host compatibility notes](docs/deployment.md#configure-the-deployment-server); this also affects Docker hosts. |
 | A service is unhealthy | Run `docker compose ps` and `docker compose logs <service>`. |
-| No existing courses or trained users | A fresh container installation starts empty. Create accounts and enroll new profiles. |
+| No existing courses or trained users | Run `docker compose up` to rebuild the source images and run the automatic demo bootstrap. Inspect `docker compose logs backend ml` if seeding reports an account ID conflict. |
 | Teacher signup is unavailable | Provision the account with the explicit staff command above. |
 | GHCR pull is denied | Make the three packages public or log in with package read permission. |
 | Behaviour score is unavailable | Complete enrollment and inspect `docker compose logs ml backend`. |

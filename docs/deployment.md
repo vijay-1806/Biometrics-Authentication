@@ -1,8 +1,26 @@
 # Containers and continuous delivery
 
+## One-command local startup
+
+Run `docker compose up` from the repository root. Compose builds the current source, starts MongoDB 7, restores saved LMS records once, and installs the three trained student ML profiles. See the [README demo accounts](../README.md#saved-demo-accounts-and-models) for working logins. Use `docker compose up -d --wait` for background operation.
+
+`DEMO_SEED=true` is enabled for the local Compose stack. The backend uses a database marker to import missing saved records once. It keeps existing accounts, changed passwords, and course edits. A saved email with a different account ID stops bootstrap rather than disconnecting courses and ML profiles. The ML bootstrap copies only missing student profiles/models and leaves existing trained models, console accounts, API keys, and encryption keys in place. Restarting preserves the saved data.
+
+The default database uses `mongo7-data`; the previous MongoDB 8 volume `mongo-data` is retained and never opened with MongoDB 7. MongoDB 7 avoids the MongoDB 8 startup failure on Linux kernels 6.19–7.0.13. The production manifest still uses MongoDB 8 and requires a compatible host kernel.
+
+### Explicit restoration
+
+Automatic bootstrap normally removes the need for a manual import. To explicitly restore the archived student ML files and missing LMS records again, while the stack is running:
+
+```bash
+sudo python3 scripts/restore-saved-demo.py
+```
+
+This command backs up ML files it replaces under `ml-data/restore-backup-<timestamp>`. Existing MongoDB records remain in place. It verifies model loading, restarts ML to clear its cache, and waits for healthy services. Use `python3 scripts/restore-saved-demo.py --check` to validate inputs without changing data.
+
 ## Local source build
 
-Run `docker compose up --build -d --wait` from the repository root. Docker Compose v2.20+ is required. No environment file is required.
+Run `docker compose up` from the repository root. Docker Compose v2.20+ is required. No environment file is required.
 
 The frontend builds with Node.js 22 and runs with unprivileged Nginx on port 8080. The API runs as the Node image's unprivileged user. BioAuth runs as UID 10001 with Python 3.11 and one Uvicorn worker. MongoDB is available only inside the Compose network.
 
@@ -12,18 +30,18 @@ Nginx forwards `/api/` and `/socket.io/` to the API; `/bio-api/` (with the prefi
 
 | Volume | Contents |
 | --- | --- |
-| `mongo-data` | LMS users, courses, assessments, results, and activity |
+| `mongo7-data` (local) / `mongo-data` (production) | LMS users, courses, assessments, results, and activity |
 | `ml-data` | Enrollment, tenants, sessions, API keys, audit data, and the encryption master key |
 | `ml-models` | Trained models |
 | `backend-runtime` | Automatically generated JWT signing secret |
 
 `docker compose down` preserves this state. `docker compose down --volumes` deletes it. Back up all four volumes together, including `ml-data/.master_key`; losing the key can make encrypted values unreadable.
 
-The build context excludes local environment files, dataset/model directories, and database exports. Images contain application code and dependencies, not the repository's saved user records.
+The build context excludes environment files, console account exports, encrypted keys, session files, and unrelated ML records. Images include the LMS demo exports and exactly three student profile/model pairs. Local Compose explicitly enables their bootstrap; the production manifest leaves `DEMO_SEED` disabled.
 
 ## GitHub Actions pipeline
 
-The workflow runs on pushes and pull requests targeting `release/v1.2`. It has five ordered stages:
+The workflow runs on pushes and pull requests targeting `main` and `release/v1.2`. Publishing and deployment run only for successful `main` pushes. It has five ordered stages:
 
 1. **Compile:** install locked frontend dependencies; compile the React production bundle and Python bytecode; syntax-check Node source and deployment scripts; validate Compose; run six tests of deployment success, pull failure, unhealthy rollout, route-health failure, first-install failure, and deployment locking.
 2. **Build:** build the frontend, Node API, and Python images in parallel for `linux/amd64`. Export each as a workflow artifact.
@@ -70,7 +88,7 @@ Add these **repository variables** under Settings → Secrets and variables → 
 
 Keep `DEPLOY_ENABLED` off until the other values are configured. The server's Docker login uses a temporary workflow token in an isolated config directory; cleanup removes it and leaves existing server credentials alone. No long-lived registry secret is needed.
 
-Trigger deployment with the next push to `release/v1.2`. The production environment records deployment status in GitHub. Optional environment protection rules can restrict deployment branches or require reviewers, but the workflow does not require approval by itself.
+Trigger deployment with the next push to `main`. The production environment records deployment status in GitHub. Optional environment protection rules can restrict deployment branches or require reviewers, but the workflow does not require approval by itself.
 
 ### Server directories and instance settings
 

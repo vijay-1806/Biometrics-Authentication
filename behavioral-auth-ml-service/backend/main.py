@@ -49,10 +49,13 @@ from passages import (
     ENROLL_PASSAGES, PHASE_LABELS, PHASE_DIGRAPHS,
     get_passage_for_sample, get_phase_for_sample,
 )
+import demo_bootstrap
+demo_bootstrap.bootstrap()
 import storage
 import tenants
 from cache import cache
 import auth
+demo_bootstrap.bootstrap_console_accounts(auth)
 import activity
 
 app = FastAPI(
