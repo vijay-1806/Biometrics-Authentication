@@ -1,0 +1,83 @@
+const mongoose = require('mongoose');
+
+const behaviorSessionSchema = new mongoose.Schema(
+  {
+    _id: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => new mongoose.Types.ObjectId().toString(),
+    },
+    student: {
+      type: mongoose.Schema.Types.Mixed,
+      ref: 'User',
+      required: true,
+    },
+    exam: {
+      type: mongoose.Schema.Types.Mixed, // Quiz or Assignment ID
+      required: false,
+    },
+    session: {
+      type: String, // Unique session identifier for each exam run
+      index: true,
+    },
+    smoothedScore: {
+      type: Number,
+      default: 0.0,
+    },
+    history: {
+      type: [Number],
+      default: [],
+    },
+    alreadyFlaggedRecently: {
+      type: Boolean,
+      default: false,
+    },
+    flagTimeoutEnd: {
+      type: Date,
+      default: null,
+    },
+    totalWindowsScored: {
+      type: Number,
+      default: 0,
+    },
+    tabBlurCount: {
+      type: Number,
+      default: 0,
+    },
+    pasteCount: {
+      type: Number,
+      default: 0,
+    },
+    copyCount: {
+      type: Number,
+      default: 0,
+    },
+    deviceInfo: {
+      type: mongoose.Schema.Types.Mixed,
+    },
+    initialDeviceInfo: {
+      type: mongoose.Schema.Types.Mixed,
+    },
+    deviceChangeFlagged: {
+      type: Boolean,
+      default: false,
+    },
+    assessmentSessionId: {
+      type: String,
+      required: false,
+      index: true,
+    },
+    sessionPin: {
+      type: String,
+      required: false,
+    }
+  },
+  {
+    timestamps: true,
+  }
+);
+
+// Keep session summaries available for post-assessment review.
+behaviorSessionSchema.index({ createdAt: 1 });
+behaviorSessionSchema.index({ student: 1, assessmentSessionId: 1 });
+
+module.exports = mongoose.model('BehaviorSession', behaviorSessionSchema);

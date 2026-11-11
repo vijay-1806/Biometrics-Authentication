@@ -1,0 +1,280 @@
+import json
+import os
+import joblib
+
+DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(MODEL_DIR, exist_ok=True)
+
+
+def _user_file(user_id: str, tenant_id: str = "default") -> str:
+    if tenant_id == "default":
+        # Backward compatibility: root data directory
+        return os.path.join(DATA_DIR, f"{user_id}.json")
+    tenant_dir = os.path.join(DATA_DIR, "tenants", tenant_id)
+    os.makedirs(tenant_dir, exist_ok=True)
+    return os.path.join(tenant_dir, f"{user_id}.json")
+
+
+def _model_file(user_id: str, tenant_id: str = "default") -> str:
+    if tenant_id == "default":
+        # Backward compatibility: root models directory
+        return os.path.join(MODEL_DIR, f"{user_id}.joblib")
+    tenant_dir = os.path.join(MODEL_DIR, "tenants", tenant_id)
+    os.makedirs(tenant_dir, exist_ok=True)
+    return os.path.join(tenant_dir, f"{user_id}.joblib")
+
+
+# Runtime aliases are populated from LMS accounts.
+USER_ALIASES = {}
+CANONICAL_META = {}
+
+
+def _sync_aliases_from_mongo():
+    """Dynamically scan MongoDB lms_demo to index all user accounts."""
+    try:
+        import pymongo
+        client = pymongo.MongoClient(os.getenv('MONGO_URI', 'mongodb://localhost:27017/lms_demo'), serverSelectionTimeoutMS=400)
+        db = client['lms_demo']
+        users = list(db.users.find({}, {'_id': 1, 'name': 1, 'email': 1}))
+        for u in users:
+            cid = str(u['_id']).lower()
+            name = str(u.get('name') or '').strip().lower()
+            email = str(u.get('email') or '').strip().lower()
+            USER_ALIASES[cid] = cid
+            if name:
+                USER_ALIASES[name] = cid
+            if email:
+                USER_ALIASES[email] = cid
+            CANONICAL_META[cid] = {'name': name, 'email': email}
+    except Exception:
+        pass
+
+
+# Perform initial scan on startup
+_sync_aliases_from_mongo()
+
+
+def _resolve_canonical_id(user_id: str) -> str:
+    """Resolve usernames, emails, or alias IDs to canonical dataset storage ID."""
+    uid = str(user_id).strip().lower()
+    if uid in USER_ALIASES:
+        return USER_ALIASES[uid]
+
+    # Query MongoDB for newly registered users
+    try:
+        import pymongo
+        from bson import ObjectId
+        client = pymongo.MongoClient(os.getenv('MONGO_URI', 'mongodb://localhost:27017/lms_demo'), serverSelectionTimeoutMS=400)
+        db = client['lms_demo']
+        
+        query = None
+        if len(uid) == 24 and all(c in '0123456789abcdef' for c in uid):
+            try:
+                query = {'_id': {'$in': [uid, ObjectId(uid)]}}
+            except Exception:
+                pass
+        
+        if not query:
+            query = {'$or': [{'name': {'$regex': f'^{uid}$', '$options': 'i'}}, {'email': uid}]}
+
+        u = db.users.find_one(query)
+        if u and '_id' in u:
+            cid = str(u['_id']).lower()
+            name = str(u.get('name') or '').strip().lower()
+            email = str(u.get('email') or '').strip().lower()
+            USER_ALIASES[cid] = cid
+            if name:
+                USER_ALIASES[name] = cid
+            if email:
+                USER_ALIASES[email] = cid
+            CANONICAL_META[cid] = {'name': name, 'email': email}
+            return cid
+    except Exception:
+        pass
+
+    return user_id
+
+
+SYSTEM_FILES = {
+    "api_keys", "memberships", "sessions", "tenants",
+    "tenant_metrics", "users", "password_resets", "audit_logs",
+    "risk_events", "verifications"
+}
+
+
+def load_user(user_id: str, tenant_id: str = "default") -> dict:
+    canonical_id = _resolve_canonical_id(user_id)
+    
+    # Check all possible candidate file paths
+    candidate_paths = [_user_file(canonical_id, tenant_id)]
+    if canonical_id != user_id:
+        candidate_paths.append(_user_file(user_id, tenant_id))
+    
+    meta = CANONICAL_META.get(canonical_id)
+    if meta:
+        if meta.get("name"):
+            candidate_paths.append(_user_file(meta["name"], tenant_id))
+        if meta.get("email"):
+            candidate_paths.append(_user_file(meta["email"], tenant_id))
+
+    # Strict tenant isolation: do NOT fall back across tenants
+
+    found_path = None
+    for p in candidate_paths:
+        if os.path.exists(p):
+            found_path = p
+            break
+
+    if not found_path:
+        return {
+            "user_id": user_id,
+            "tenant_id": tenant_id,
+            "enroll_samples": [],       # list of feature vectors (lists)
+            "trusted_sessions": [],     # feature vectors from high-trust verify sessions
+            "baseline_trained_at": None,
+            "recent_scores": [],        # rolling trust scores for smoothing (last N)
+        }
+
+    try:
+        with open(found_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        data = None
+
+    if not isinstance(data, dict):
+        return {
+            "user_id": user_id,
+            "tenant_id": tenant_id,
+            "enroll_samples": [],
+            "trusted_sessions": [],
+            "baseline_trained_at": None,
+            "recent_scores": [],
+        }
+
+    if "enroll_samples" not in data or not isinstance(data["enroll_samples"], list):
+        data["enroll_samples"] = []
+    if "tenant_id" not in data:
+        data["tenant_id"] = tenant_id
+
+    # If canonical path was missing in the target tenant, auto-sync it immediately
+    canonical_path = _user_file(canonical_id, tenant_id)
+    if not os.path.exists(canonical_path):
+        try:
+            with open(canonical_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except Exception:
+            pass
+
+    return data
+
+
+def save_user(user_id: str, data: dict, tenant_id: str = "default"):
+    canonical_id = _resolve_canonical_id(user_id)
+    data["tenant_id"] = tenant_id
+
+    # Save to canonical ID path
+    canonical_path = _user_file(canonical_id, tenant_id)
+    os.makedirs(os.path.dirname(canonical_path), exist_ok=True)
+    with open(canonical_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+    # Multi-sync to raw user_id file if different
+    if canonical_id != user_id:
+        raw_path = _user_file(user_id, tenant_id)
+        with open(raw_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
+    # Multi-sync to friendly username and email files if known
+    meta = CANONICAL_META.get(canonical_id)
+    if meta:
+        if meta.get("name") and meta["name"] != canonical_id and meta["name"] != user_id:
+            name_path = _user_file(meta["name"], tenant_id)
+            with open(name_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+
+
+def save_model(user_id: str, model_bundle: dict, tenant_id: str = "default"):
+    canonical_id = _resolve_canonical_id(user_id)
+    canonical_path = _model_file(canonical_id, tenant_id)
+    os.makedirs(os.path.dirname(canonical_path), exist_ok=True)
+    joblib.dump(model_bundle, canonical_path)
+
+    # Multi-sync to raw user_id model if different
+    if canonical_id != user_id:
+        joblib.dump(model_bundle, _model_file(user_id, tenant_id))
+
+    # Multi-sync to friendly username model if known
+    meta = CANONICAL_META.get(canonical_id)
+    if meta and meta.get("name") and meta["name"] != canonical_id and meta["name"] != user_id:
+        joblib.dump(model_bundle, _model_file(meta["name"], tenant_id))
+
+
+def load_model(user_id: str, tenant_id: str = "default"):
+    canonical_id = _resolve_canonical_id(user_id)
+    
+    candidate_paths = [_model_file(canonical_id, tenant_id)]
+    if canonical_id != user_id:
+        candidate_paths.append(_model_file(user_id, tenant_id))
+    
+    meta = CANONICAL_META.get(canonical_id)
+    if meta and meta.get("name"):
+        candidate_paths.append(_model_file(meta["name"], tenant_id))
+
+    # Also fallback to default/root models if not in tenant directory
+    if tenant_id != "default":
+        candidate_paths.append(_model_file(canonical_id, "default"))
+        if canonical_id != user_id:
+            candidate_paths.append(_model_file(user_id, "default"))
+        if meta and meta.get("name"):
+            candidate_paths.append(_model_file(meta["name"], "default"))
+
+    for p in candidate_paths:
+        if os.path.exists(p):
+            return joblib.load(p)
+
+    return None
+
+
+def list_users(tenant_id: str = "default"):
+    """Return clean list of unique user identifiers that possess biometric profiles."""
+    target_dirs = []
+    if tenant_id == "default":
+        target_dirs.append(DATA_DIR)
+    else:
+        t_dir = os.path.join(DATA_DIR, "tenants", tenant_id)
+        if os.path.exists(t_dir):
+            target_dirs.append(t_dir)
+        # Always fallback to root/default data dir so profiles are accessible
+        target_dirs.append(DATA_DIR)
+
+    seen_canonicals = set()
+    result_users = []
+
+    for t_dir in target_dirs:
+        if not os.path.exists(t_dir):
+            continue
+        for fname in os.listdir(t_dir):
+            if not fname.endswith(".json"):
+                continue
+            base = fname[:-5]
+            if base in SYSTEM_FILES:
+                continue
+            
+            fpath = os.path.join(t_dir, fname)
+            try:
+                with open(fpath, "r", encoding="utf-8") as fp:
+                    content = json.load(fp)
+                if not isinstance(content, dict) or "enroll_samples" not in content:
+                    continue
+                # Ensure it has sample data
+                cid = _resolve_canonical_id(base)
+                if cid not in seen_canonicals:
+                    seen_canonicals.add(cid)
+                    result_users.append(cid)
+            except Exception:
+                continue
+
+    return result_users
+

@@ -1,0 +1,72 @@
+[
+  {
+    "_id": "000000000000000000000009",
+    "name": "Demo Teacher Three",
+    "email": "teacher-three@lms.example.com",
+    "password": "$2b$10$HtXlfRpttaqlIJ7iz/inH.k/nDMs8aqYA512sgD1nYDLvWMeq31mW",
+    "role": "teacher",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z",
+    "__v": 0
+  },
+  {
+    "_id": "00000000000000000000000a",
+    "name": "Demo Teacher Two",
+    "email": "teacher-two@lms.example.com",
+    "password": "$2b$10$HX7cTvqcxZAugvG0EnjbIOnpAG6gX/qDrzefrbtoHFxXXDoFkSleq",
+    "role": "teacher",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z",
+    "__v": 0
+  },
+  {
+    "_id": "00000000000000000000000b",
+    "name": "Demo Administrator",
+    "email": "admin@lms.example.com",
+    "password": "$2b$10$Flk86hS8DFwvo6S6yLN6l.On2HSjOJKvL2xBJdFdCOgUQzyNC3uNG",
+    "role": "admin",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z",
+    "__v": 0
+  },
+  {
+    "_id": "00000000000000000000000c",
+    "name": "Demo Teacher",
+    "email": "teacher@lms.example.com",
+    "password": "$2b$10$SkpXqP8q7xoSDIBCUn9FBuzPsxcmp/6BHVE649wWoFJurgu4xGpm6",
+    "role": "teacher",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z",
+    "__v": 0
+  },
+  {
+    "_id": "00000000000000000000000d",
+    "name": "Student One",
+    "email": "student-one@lms.example.com",
+    "password": "$2b$10$i/Q5TN.woqVq8RnssgxCg.z9cSzdiCnjjVfJ46pXX/TQ1PAf8MQG2",
+    "role": "student",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z",
+    "__v": 0
+  },
+  {
+    "_id": "00000000000000000000000e",
+    "name": "Student Two",
+    "email": "student-two@lms.example.com",
+    "password": "$2b$10$YqqUyKut/LCRwQI97a8CG.CkBlNfsezCvnLuWoD7BhO4M50jeEzUi",
+    "role": "student",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z",
+    "__v": 0
+  },
+  {
+    "_id": "00000000000000000000000f",
+    "name": "Student Three",
+    "email": "student-three@lms.example.com",
+    "password": "$2b$10$91Ht66iFXMIkvTShVxy0YOGmzVrsKRCFUjezs4eU3FrGPYWbPZ5wO",
+    "role": "student",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z",
+    "__v": 0
+  }
+]

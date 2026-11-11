@@ -1,0 +1,349 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import {
+  Users,
+  BookOpen,
+  ShieldAlert,
+  Trash2,
+  Search,
+  Filter,
+  AlertTriangle,
+  FileText, Bell, Send, CheckCircle2, XCircle, ClipboardCheck
+} from 'lucide-react';
+
+const AdminDashboard = ({ view = 'overview' }) => {
+  const isUserManagement = view === 'users';
+  const [activityNow, setActivityNow] = useState(Date.now());
+  const isOnline = (account) => {
+    const lastActive = account.lastActiveAt ? new Date(account.lastActiveAt).getTime() : 0;
+    return lastActive > 0 && activityNow - lastActive < 120000;
+  };
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    studentsCount: 0,
+    teachersCount: 0,
+    adminsCount: 0,
+    coursesCount: 0,
+    assignmentsCount: 0
+  });
+  const [users, setUsers] = useState([]);
+  const [filteredUsers, setFilteredUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [trainingRequests, setTrainingRequests] = useState([]);
+  const [audience, setAudience] = useState('students');
+  const [noticeTitle, setNoticeTitle] = useState('');
+  const [noticeMessage, setNoticeMessage] = useState('');
+  const [sendingNotice, setSendingNotice] = useState(false);
+
+  const fetchAdminData = async () => {
+    try {
+      setLoading(true);
+      const [statsRes, usersRes, requestsRes] = await Promise.all([
+        axios.get('/api/admin/stats'),
+        axios.get('/api/admin/users'),
+        isUserManagement ? Promise.resolve({ data: [] }) : axios.get('/api/behavior/training-requests')
+      ]);
+
+      setStats(statsRes.data);
+      setUsers(usersRes.data);
+      setFilteredUsers(usersRes.data);
+      setTrainingRequests(requestsRes.data || []);
+    } catch (err) {
+      console.error('Failed to load admin panel details', err);
+      setError('Failed to fetch administrative data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAdminData();
+  }, [isUserManagement]);
+
+  useEffect(() => {
+    if (!isUserManagement) return;
+    const interval = setInterval(() => {
+      setActivityNow(Date.now());
+      axios.get('/api/admin/users').then(({ data }) => setUsers(data)).catch(() => {});
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [isUserManagement]);
+
+  // Filter application
+  useEffect(() => {
+    let result = users;
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(u =>
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q)
+      );
+    }
+
+    if (roleFilter !== 'all') {
+      result = result.filter(u => u.role === roleFilter);
+    }
+
+    setFilteredUsers(result);
+  }, [searchQuery, roleFilter, users]);
+
+  const reviewTrainingRequest = async (requestId, status) => {
+    try {
+      await axios.patch(`/api/behavior/training-requests/${requestId}`, { status });
+      setTrainingRequests(current => current.filter(request => request._id !== requestId));
+      setMessage(`Training data request ${status}.`);
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) { setError(err.response?.data?.message || 'Could not review request.'); }
+  };
+
+  const sendAnnouncement = async (event) => {
+    event.preventDefault(); setSendingNotice(true);
+    try {
+      await axios.post('/api/notifications', { title: noticeTitle.trim(), message: noticeMessage.trim(), audience, type: 'info' });
+      setNoticeTitle(''); setNoticeMessage('');
+      setMessage(`Announcement sent to ${audience === 'both' ? 'students and teachers' : audience}.`);
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) { setError(err.response?.data?.message || 'Announcement could not be sent.'); }
+    finally { setSendingNotice(false); }
+  };
+
+  const handleRoleChange = async (userId, newRole) => {
+    try {
+      const res = await axios.put(`/api/admin/users/${userId}/role`, { role: newRole });
+      setMessage(res.data.message);
+      setTimeout(() => setMessage(''), 3000);
+
+      // Update local state
+      setUsers(prev => prev.map(u => u._id === userId ? { ...u, role: newRole } : u));
+      // Re-fetch stats in background
+      const statsRes = await axios.get('/api/admin/stats');
+      setStats(statsRes.data);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update role');
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!window.confirm('Are you absolutely sure you want to delete this user? All their enrollments and grades will be cleared.')) {
+      return;
+    }
+
+    try {
+      const res = await axios.delete(`/api/admin/users/${userId}`);
+      setMessage(res.data.message);
+      setTimeout(() => setMessage(''), 3000);
+
+      setUsers(prev => prev.filter(u => u._id !== userId));
+
+      // Re-fetch stats in background
+      const statsRes = await axios.get('/api/admin/stats');
+      setStats(statsRes.data);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to delete user');
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-extrabold text-slate-900">{isUserManagement ? 'User Management' : 'Admin Dashboard'}</h1>
+
+      </div>
+
+      {message && (
+        <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-600 text-sm">
+          {message}
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl text-rose-600 text-sm">
+          {error}
+        </div>
+      )}
+
+      {!isUserManagement && <>
+      {/* KPI Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* Total Users */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+            <Users size={24} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Accounts</p>
+            <h3 className="text-2xl font-black text-slate-800 mt-1">{stats.totalUsers}</h3>
+          </div>
+        </div>
+
+        {/* Teachers count */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
+            <ShieldAlert size={24} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Teachers</p>
+            <h3 className="text-2xl font-black text-slate-800 mt-1">{stats.teachersCount}</h3>
+          </div>
+        </div>
+
+        {/* Students count */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <Users size={24} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Students</p>
+            <h3 className="text-2xl font-black text-slate-800 mt-1">{stats.studentsCount}</h3>
+          </div>
+        </div>
+
+        {/* Courses count */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+            <BookOpen size={24} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Courses</p>
+            <h3 className="text-2xl font-black text-slate-800 mt-1">{stats.coursesCount}</h3>
+          </div>
+        </div>
+      </div>
+
+      <section className="grid gap-6 xl:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between"><div><h2 className="flex items-center gap-2 font-bold text-slate-900"><ClipboardCheck size={18} className="text-indigo-600"/>ML data requests</h2></div><span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">{trainingRequests.length} pending</span></div>
+          {trainingRequests.length ? <div className="space-y-3">{trainingRequests.map(request => <article key={request._id} className="rounded-xl border border-slate-100 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-bold text-slate-800">{request.student?.name || request.studentName || 'Student'} <span className="font-normal text-slate-500">· +{request.amount} records</span></p><p className="mt-1 text-xs text-slate-500">{request.student?.email}</p><p className="mt-2 text-sm text-slate-700">{request.reason}</p></div><div className="flex gap-2"><button onClick={() => reviewTrainingRequest(request._id, 'approved')} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white"><CheckCircle2 size={14}/>Approve</button><button onClick={() => reviewTrainingRequest(request._id, 'rejected')} className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-3 py-2 text-xs font-bold text-rose-600"><XCircle size={14}/>Decline</button></div></div></article>)}</div> : <p className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500">No pending training requests.</p>}
+        </div>
+        <form onSubmit={sendAnnouncement} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="flex items-center gap-2 font-bold text-slate-900"><Bell size={18} className="text-indigo-600"/>School announcement</h2><label className="mt-4 block text-xs font-bold text-slate-600">Audience<select value={audience} onChange={e => setAudience(e.target.value)} className="lms-input mt-1"><option value="students">Students</option><option value="teachers">Teachers</option><option value="both">Students and teachers</option></select></label><label className="mt-3 block text-xs font-bold text-slate-600">Title<input required maxLength={100} value={noticeTitle} onChange={e => setNoticeTitle(e.target.value)} className="lms-input mt-1" placeholder="Announcement title"/></label><label className="mt-3 block text-xs font-bold text-slate-600">Message<textarea required maxLength={1200} rows={3} value={noticeMessage} onChange={e => setNoticeMessage(e.target.value)} className="lms-input mt-1" placeholder="Write the update for your school"/></label><button disabled={sendingNotice} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"><Send size={15}/>{sendingNotice ? 'Sending…' : 'Send announcement'}</button></form>
+      </section>
+
+      </>}
+
+      {isUserManagement && <>
+      {/* User Accounts Manager */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden space-y-4 p-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <h3 className="font-bold text-lg text-slate-900">User Accounts Directory</h3>
+
+          </div>
+
+          {/* Search / Filter Actions */}
+          <div className="flex gap-3 w-full md:w-auto">
+            {/* Search Input */}
+            <div className="relative flex-1 md:w-60">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search name or email..."
+                className="w-full bg-slate-50 text-slate-800 border border-slate-200 rounded-lg py-1.5 pl-9 pr-3 text-xs placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500"
+              />
+            </div>
+
+            {/* Role Select Filter */}
+            <div className="relative">
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                className="bg-slate-50 text-slate-800 border border-slate-200 rounded-lg py-1.5 px-3 text-xs focus:outline-none font-medium"
+              >
+                <option value="all">All Roles</option>
+                <option value="student">Students</option>
+                <option value="teacher">Teachers</option>
+                <option value="admin">Admins</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {filteredUsers.length === 0 ? (
+          <div className="p-8 text-center text-slate-500 text-sm">
+            No matching accounts found.
+          </div>
+        ) : (
+          <div className="overflow-x-auto border border-slate-100 rounded-xl">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-3">User Profile</th>
+                  <th className="px-6 py-3">Email Address</th>
+                  <th className="px-6 py-3">System Role</th>
+                  <th className="px-6 py-3">Registered On</th>
+                  <th className="px-6 py-3">Last Active</th>
+                  <th className="px-6 py-3 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredUsers.map(u => (
+                  <tr key={u._id} className="hover:bg-slate-50/50">
+                    <td className="px-6 py-4 font-semibold text-slate-800">
+                      <span>{u.name}</span>
+                      <span className={`mt-1 flex items-center gap-1.5 text-xs font-medium ${isOnline(u) ? 'text-emerald-700' : 'text-rose-600'}`}>
+                        <span aria-hidden="true" className={`h-2 w-2 rounded-full ${isOnline(u) ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        {isOnline(u) ? 'Online' : 'Offline'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-slate-500">{u.email}</td>
+                    <td className="px-6 py-4">
+                      {/* Role Selector dropdown */}
+                      <select
+                        value={u.role}
+                        onChange={(e) => handleRoleChange(u._id, e.target.value)}
+                        className="bg-slate-50 text-slate-800 border border-slate-200 rounded-md px-2 py-1 text-xs focus:outline-none capitalize font-semibold"
+                      >
+                        <option value="student">student</option>
+                        <option value="teacher">teacher</option>
+                        <option value="admin">admin</option>
+                      </select>
+                    </td>
+                    <td className="px-6 py-4 text-slate-500 text-xs">
+                      {new Date(u.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 text-slate-500 text-xs whitespace-nowrap">
+                      {u.lastActiveAt ? new Date(u.lastActiveAt).toLocaleString() : 'Not recorded'}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        onClick={() => handleDeleteUser(u._id)}
+                        className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                        title="Delete User"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      </>}
+    </div>
+  );
+};
+
+export default AdminDashboard;

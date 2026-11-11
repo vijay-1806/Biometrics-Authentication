@@ -1,0 +1,209 @@
+const Assignment = require('../models/Assignment');
+const Submission = require('../models/Submission');
+const Course = require('../models/Course');
+const { runCode } = require('../utils/codeRunner');
+const { isStudentAuthorizedForExam } = require('../socketHandler');
+
+// @desc    Create a coding assignment
+// @route   POST /api/assignments
+// @access  Private (Teacher or Admin)
+const createAssignment = async (req, res) => {
+  try {
+    const { course, title, description, starterCode, language, testCases, durationMinutes } = req.body;
+
+    if (!course || !title || !description || !testCases || testCases.length === 0) {
+      return res.status(400).json({ message: 'Please provide course, title, description, and test cases' });
+    }
+
+    // Verify course exists and belongs to the teacher
+    const courseObj = await Course.findByRecordId(course);
+    if (!courseObj) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    if (courseObj.teacher.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Not authorized to add assignments to this course' });
+    }
+
+    const assignment = await Assignment.create({
+      course: courseObj._id,
+      title,
+      description,
+      starterCode: starterCode || '',
+      language: language || 'javascript',
+      durationMinutes: Math.min(240, Math.max(1, Number(durationMinutes) || 60)),
+      testCases,
+    });
+
+    res.status(201).json(assignment);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const configureLiveAssessment = async (req, res) => {
+  try {
+    const assignment = await Assignment.findByRecordId(req.params.id);
+    if (!assignment) return res.status(404).json({ message: 'Assignment not found' });
+    const course = await Course.findByRecordId(assignment.course).select('teacher');
+    if (!course || (String(course.teacher) !== String(req.user._id) && req.user.role !== 'admin')) return res.status(403).json({ message: 'You cannot change this course assessment.' });
+    assignment.isLiveAssessment = Boolean(req.body.isLiveAssessment);
+    if (req.body.durationMinutes !== undefined) assignment.durationMinutes = Math.min(240, Math.max(1, Number(req.body.durationMinutes) || 60));
+    await assignment.save();
+    res.json(assignment);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Could not update the live assessment.' });
+  }
+};
+
+// @desc    Get assignment by ID
+// @route   GET /api/assignments/:id
+// @access  Private
+const getAssignmentById = async (req, res) => {
+  try {
+    const assignment = await Assignment.findByRecordId(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    // Phase 5: Enforce active session authorization for students
+    if (req.user && req.user.role === 'student' && assignment.isLiveAssessment) {
+      const authCheck = await isStudentAuthorizedForExam(req.user._id, req.params.id);
+      if (!authCheck.authorized || authCheck.status !== 'active' || (authCheck.endsAt && authCheck.endsAt <= new Date())) {
+        return res.status(403).json({ 
+          message: 'Active assessment session required. Please join using the 6-digit PIN on the lobby screen.',
+          requiresSessionPin: true 
+        });
+      }
+    }
+
+    res.json(assignment);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Run code against test cases (No save to DB)
+// @route   POST /api/assignments/:id/run
+// @access  Private
+const runAssignmentCode = async (req, res) => {
+  try {
+    const { code, language } = req.body;
+    const assignment = await Assignment.findByRecordId(req.params.id);
+
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (req.user && req.user.role === 'student' && assignment.isLiveAssessment) {
+      const authCheck = await isStudentAuthorizedForExam(req.user._id, req.params.id);
+      if (!authCheck.authorized || authCheck.status !== 'active' || (authCheck.endsAt && authCheck.endsAt <= new Date())) {
+        return res.status(403).json({ message: 'Active assessment session required to run code.' });
+      }
+    }
+
+    if (!code) {
+      return res.status(400).json({ message: 'Please provide code to run' });
+    }
+
+    const runResult = runCode(code, assignment.testCases, language || assignment.language);
+
+    res.json(runResult);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Submit code (Runs and saves to DB)
+// @route   POST /api/assignments/:id/submit
+// @access  Private (Student only)
+const submitAssignment = async (req, res) => {
+  try {
+    const { code, language } = req.body;
+    const assignment = await Assignment.findByRecordId(req.params.id);
+
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    if (req.user && req.user.role === 'student' && assignment.isLiveAssessment) {
+      const authCheck = await isStudentAuthorizedForExam(req.user._id, req.params.id, true);
+      if (!authCheck.authorized || !['active', 'ended'].includes(authCheck.status)) {
+        return res.status(403).json({ message: 'Active assessment session required to submit code.' });
+      }
+    }
+
+    if (!code) {
+      return res.status(400).json({ message: 'Please provide code to submit' });
+    }
+
+    const runResult = runCode(code, assignment.testCases, language || assignment.language);
+
+    // Save submission to database
+    const liveSession = assignment.isLiveAssessment ? await isStudentAuthorizedForExam(req.user._id, req.params.id, true) : null;
+    const submission = await Submission.create({
+      student: req.user._id,
+      assessmentSessionId: liveSession?.session?.assessmentSessionId || null,
+      assignment: assignment._id,
+      code,
+      language: language || assignment.language,
+      status: runResult.status,
+      output: runResult.consoleOutput,
+      testCasesPassed: runResult.passedCount,
+      testCasesTotal: runResult.totalCount,
+    });
+
+    res.status(201).json({
+      submission,
+      runResult,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Get submissions for an assignment
+// @route   GET /api/assignments/:id/submissions
+// @access  Private
+const getSubmissions = async (req, res) => {
+  try {
+    const assignment = await Assignment.findByRecordId(req.params.id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+
+    let submissions;
+
+    if (req.user.role === 'student') {
+      // Students see their own submissions
+      submissions = await Submission.find({
+        assignment: req.params.id,
+        student: req.user._id,
+      }).sort({ createdAt: -1 });
+    } else {
+      // Teachers and Admins see all submissions
+      submissions = await Submission.find({ assignment: req.params.id })
+        .populate('student', 'name email')
+        .sort({ createdAt: -1 });
+    }
+
+    res.json(submissions);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+module.exports = {
+  createAssignment,
+  configureLiveAssessment,
+  getAssignmentById,
+  runAssignmentCode,
+  submitAssignment,
+  getSubmissions,
+};
