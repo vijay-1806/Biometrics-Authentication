@@ -36,16 +36,16 @@ The workflow runs on pushes and pull requests targeting `main` and `release/v1.2
 1. **Compile:** install locked frontend dependencies; compile the React production bundle and Python bytecode; syntax-check Node source and deployment scripts; validate Compose; run six tests of deployment success, pull failure, unhealthy rollout, route-health failure, first-install failure, and deployment locking.
 2. **Build:** build the frontend, Node API, and Python images in parallel for `linux/amd64`. Export each as a workflow artifact.
 3. **Test:** load those exact images and start the full stack with `--no-build`. Run the authentication/WebSocket/biometric smoke test, 11 existing SaaS and tenant tests, and container-recreation persistence checks. On failure, upload diagnostics.
-4. **Publish:** after all tests pass, load the same artifacts and push them to GHCR. No image is rebuilt. Publish `sha-<full-commit-sha>` and moving `1.2` tags. Create a release bundle containing `compose.yml`, `release.env` with digest-pinned images, and `deploy.sh`.
-5. **Deploy:** when explicitly enabled, transfer the release bundle to the server over SSH, authenticate to GHCR using the workflow token, pull images before changing the application, update Compose, check container and proxied API health, and record the active release. Failed rollouts restore the previously successful release and still fail the workflow.
+4. **Publish:** after all tests pass, load the same artifacts and publish the tested images to Docker Hub. Publish `sha-<full-commit-sha>` and moving `1.2` tags. Create a release bundle containing `compose.yml`, `release.env` with digest-pinned images, and `deploy.sh`.
+5. **Deploy:** when explicitly enabled, transfer the release bundle to the server over SSH, pull images before changing the application, update Compose, check container and proxied API health, and record the active release. Failed rollouts restore the previously successful release and still fail the workflow.
 
-PR runs stop after testing. Publishing requires `packages: write`; deployment uses `packages: read`. The default token permission is `contents: read`. Actions are pinned to commit SHAs. Image artifacts expire after two days, release bundles after 30 days, and frontend bundles/failed-test diagnostics after seven days.
+PR runs stop after testing. The GitHub token has `contents: read`. The publish job authenticates to Docker Hub using the configured access token. Actions are pinned to commit SHAs. Image artifacts expire after two days, release bundles after 30 days, and frontend bundles/failed-test diagnostics after seven days.
 
 The workflow can be manually dispatched when present on the default branch. Pushes to `release/v1.2` run without changing the default branch. The standalone production manifest has no build directives.
 
 ### First-run repository settings
 
-Enable Actions and allow package writes if repository/organization policy restricts them. If GHCR package names already exist, grant this repository's Actions access. Packages may remain private for automatic deployment; the workflow token authenticates the pull. For anonymous manual pulls, set all three package visibilities to public.
+Create the three Docker Hub repositories and configure `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` as described in [Configure Docker Hub publishing](../README.md#configure-docker-hub-publishing).
 
 Optionally require the compile, container build, and integration jobs as branch checks.
 
@@ -63,6 +63,7 @@ Create a GitHub environment named `production`. Add these **environment secrets*
 | --- | --- |
 | `DEPLOY_SSH_KEY` | Private key for the deployment user, without a passphrase, in OpenSSH format |
 | `DEPLOY_KNOWN_HOSTS` | Verified OpenSSH known-hosts entries for the server; custom ports use `[host]:port` |
+| `DEPLOY_DOCKERHUB_TOKEN` | Read-only Docker Hub token for private image pulls |
 
 Verify the server's key fingerprint through your trusted server console before saving known-hosts entries. The workflow enforces `StrictHostKeyChecking=yes` and does not learn or trust keys automatically.
 
@@ -75,8 +76,9 @@ Add these **repository variables** under Settings → Secrets and variables → 
 | `DEPLOY_USER` | SSH username, for example `ubuntu` |
 | `DEPLOY_PORT` | Optional SSH port; default `22` |
 | `DEPLOY_URL` | Optional public HTTPS base URL; enables post-deployment HTTP checks and the environment URL |
+| `DEPLOY_DOCKERHUB_USERNAME` | Docker Hub account for private image pulls, paired with `DEPLOY_DOCKERHUB_TOKEN` |
 
-Keep `DEPLOY_ENABLED` off until the other values are configured. The server's Docker login uses a temporary workflow token in an isolated config directory; cleanup removes it and leaves existing server credentials alone. No long-lived registry secret is needed.
+Keep `DEPLOY_ENABLED` off until the other values are configured. Public images support anonymous pulls. For private images, the deployment script logs in using the read-only token in an isolated Docker config directory and deletes the directory after deployment.
 
 Trigger deployment with the next push to `main`. The production environment records deployment status in GitHub. Optional environment protection rules can restrict deployment branches or require reviewers, but the workflow does not require approval by itself.
 
@@ -109,17 +111,17 @@ To restore the previous bundle manually on the server:
 DEPLOY_ROOT="$HOME/biometrics-authentication" bash "$HOME/biometrics-authentication/previous/deploy.sh" "$HOME/biometrics-authentication/previous"
 ```
 
-For private images, authenticate to GHCR before a manual rollback if the image layers are not already cached.
+For private images, authenticate to the registry that hosts the previous images before a manual rollback if the image layers are not already cached.
 
 ## Manual published-image deployment
 
-A clone can still use the registry overlay:
+Set `DOCKERHUB_USERNAME` in `.env` to the Docker Hub publisher's username, then run the registry overlay from the repository root:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d --no-build --pull always --wait
 ```
 
-Set `IMAGE_TAG=sha-<full-commit-sha>` in `.env` to select a revision for all three services. Private packages require `docker login ghcr.io`; public packages support anonymous pulls. This convenience command is separate from the automatic deployment bundle, which pins images by digest.
+Set `IMAGE_TAG=sha-<full-commit-sha>` in `.env` to select a revision for all three services. For private repositories, run `docker login` with a Docker Hub account that has read access. Public repositories support anonymous pulls. This convenience command is separate from the automatic deployment bundle, which pins images by digest.
 
 ## Before public hosting
 
@@ -137,4 +139,4 @@ See [security](security.md) and [limitations](limitations.md) for the project's 
 
 - [Docker Compose dependency readiness](https://docs.docker.com/compose/how-tos/startup-order/)
 - [GitHub Actions: publishing container images](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images)
-- [GHCR authentication and package visibility](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
+- [Docker Hub access tokens](https://docs.docker.com/security/access-tokens/)

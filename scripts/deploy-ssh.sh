@@ -9,8 +9,6 @@ bundle=${1:?Pass the deployment bundle directory}
 : "${DEPLOY_USER:?Set the DEPLOY_USER repository variable}"
 : "${DEPLOY_SSH_KEY:?Set the DEPLOY_SSH_KEY environment secret}"
 : "${DEPLOY_KNOWN_HOSTS:?Set the DEPLOY_KNOWN_HOSTS environment secret}"
-: "${GHCR_USER:?Missing registry username}"
-: "${GHCR_TOKEN:?Missing registry token}"
 : "${REVISION:?Missing Git revision}"
 : "${DEPLOYMENT_ID:?Missing workflow run ID and attempt}"
 DEPLOY_PORT=${DEPLOY_PORT:-22}
@@ -21,7 +19,14 @@ DEPLOY_PORT=${DEPLOY_PORT:-22}
 [[ "$REVISION" =~ ^[a-f0-9]{40}$ ]]
 [[ "$DEPLOYMENT_ID" =~ ^[0-9]+-[0-9]+$ ]]
 release_id="$REVISION-$DEPLOYMENT_ID"
-[[ "$GHCR_USER" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]]
+registry_username=${DEPLOY_DOCKERHUB_USERNAME:-}
+registry_token=${DEPLOY_DOCKERHUB_TOKEN:-}
+if [[ -n "$registry_username" || -n "$registry_token" ]]; then
+  if [[ ! "$registry_username" =~ ^[a-z0-9]+$ || -z "$registry_token" ]]; then
+    echo "Set both DEPLOY_DOCKERHUB_USERNAME and DEPLOY_DOCKERHUB_TOKEN for private images." >&2
+    exit 1
+  fi
+fi
 
 scratch=$(mktemp -d)
 remote="$DEPLOY_USER@$DEPLOY_HOST"
@@ -42,17 +47,22 @@ scp -q -P "$DEPLOY_PORT" -i "$scratch/key" -o BatchMode=yes -o IdentitiesOnly=ye
   -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$scratch/known_hosts" \
   "$scratch/release.tar.gz" "$remote:biometrics-release-$release_id.tar.gz"
 
-# Use an isolated registry config, then delete it. Do not overwrite host credentials.
-printf '%s\n' "$GHCR_TOKEN" | ssh "${ssh_options[@]}" "$remote" \
-  "umask 077; mkdir -p \"\$HOME/biometrics-authentication/.registry-$release_id\" && docker --config \"\$HOME/biometrics-authentication/.registry-$release_id\" login ghcr.io --username '$GHCR_USER' --password-stdin"
-ssh "${ssh_options[@]}" "$remote" bash -s -- "$release_id" <<'REMOTE'
+# Public Docker Hub images need no login. Use an isolated config for private pulls.
+registry_login=false
+if [[ -n "$registry_username" ]]; then
+  printf '%s\n' "$registry_token" | ssh "${ssh_options[@]}" "$remote" \
+    "umask 077; mkdir -p \"\$HOME/biometrics-authentication/.registry-$release_id\" && docker --config \"\$HOME/biometrics-authentication/.registry-$release_id\" login --username '$registry_username' --password-stdin"
+  registry_login=true
+fi
+ssh "${ssh_options[@]}" "$remote" bash -s -- "$release_id" "$registry_login" <<'REMOTE'
 set -Eeuo pipefail
 umask 077
 release_id=$1
 root="$HOME/biometrics-authentication"
 release="$root/releases/$release_id"
-# Docker CLI config only; Compose also discovers system-installed CLI plugins.
-export DOCKER_CONFIG="$root/.registry-$release_id"
+if [[ "$2" == true ]]; then
+  export DOCKER_CONFIG="$root/.registry-$release_id"
+fi
 [[ ! -e "$release" ]] || { echo "Release directory already exists." >&2; exit 1; }
 mkdir -p "$release"
 tar -xzf "$HOME/biometrics-release-$release_id.tar.gz" -C "$release"

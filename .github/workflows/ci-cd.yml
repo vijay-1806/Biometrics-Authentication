@@ -19,8 +19,6 @@ jobs:
     name: Build frontend and compile/check source
     runs-on: ubuntu-22.04
     timeout-minutes: 10
-    outputs:
-      repository: ${{ steps.release.outputs.repository }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -42,14 +40,10 @@ jobs:
       - name: Validate Compose and deployment scripts
         run: |
           docker compose config --quiet
+          DOCKERHUB_USERNAME=example docker compose -f docker-compose.yml -f docker-compose.registry.yml config --quiet
           for script in scripts/deploy.sh scripts/deploy-ssh.sh; do bash -n "$script"; done
       - name: Test deployment failure handling and rollback
         run: python scripts/test_deploy.py
-      - name: Set repository image namespace
-        id: release
-        env:
-          REPOSITORY: ${{ github.repository }}
-        run: echo "repository=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: frontend-production-bundle
@@ -161,11 +155,8 @@ jobs:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-22.04
     timeout-minutes: 15
-    permissions:
-      contents: read
-      packages: write
     env:
-      IMAGE_REPOSITORY: ${{ needs.compile.outputs.repository }}
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
       REVISION: ${{ github.sha }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -174,20 +165,28 @@ jobs:
           pattern: container-*
           merge-multiple: true
           path: ${{ runner.temp }}/images
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+      - name: Check Docker Hub namespace
+        shell: bash
+        run: |
+          if [[ ! "$DOCKERHUB_USERNAME" =~ ^[a-z0-9]+$ ]]; then
+            echo "::error::Set the DOCKERHUB_USERNAME repository variable to your Docker Hub username."
+            exit 1
+          fi
+      - name: Sign in to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Push tested images and record immutable image digests
         shell: bash
         run: |
           set -euo pipefail
+          image_repository="docker.io/$DOCKERHUB_USERNAME/biometrics-authentication"
           mkdir -p release
           printf 'RELEASE_SHA=%s\n' "$REVISION" > release/release.env
           for service in frontend backend ml; do
             docker load -i "$RUNNER_TEMP/images/$service.tar"
-            image="$IMAGE_REPOSITORY-$service"
+            image="$image_repository-$service"
             docker tag "biometrics-ci/$service:$REVISION" "$image:sha-$REVISION"
             docker push "$image:sha-$REVISION"
             digest=$(docker image inspect "$image:sha-$REVISION" --format '{{index .RepoDigests 0}}')
@@ -195,8 +194,8 @@ jobs:
           done
           # Advance the friendly tags only after every SHA image has been pushed.
           for service in frontend backend ml; do
-            docker tag "$IMAGE_REPOSITORY-$service:sha-$REVISION" "$IMAGE_REPOSITORY-$service:1.2"
-            docker push "$IMAGE_REPOSITORY-$service:1.2"
+            docker tag "$image_repository-$service:sha-$REVISION" "$image_repository-$service:1.2"
+            docker push "$image_repository-$service:1.2"
           done
           cp docker-compose.deploy.yml release/compose.yml
           cp scripts/deploy.sh release/deploy.sh
@@ -218,9 +217,6 @@ jobs:
     concurrency:
       group: biometrics-production
       cancel-in-progress: false
-    permissions:
-      contents: read
-      packages: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -234,8 +230,8 @@ jobs:
           DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          GHCR_USER: ${{ github.actor }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_DOCKERHUB_USERNAME: ${{ vars.DEPLOY_DOCKERHUB_USERNAME }}
+          DEPLOY_DOCKERHUB_TOKEN: ${{ secrets.DEPLOY_DOCKERHUB_TOKEN }}
           REVISION: ${{ github.sha }}
           DEPLOYMENT_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: bash scripts/deploy-ssh.sh release

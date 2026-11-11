@@ -3,10 +3,10 @@
 services:
   frontend:
     pull_policy: missing
-    image: ghcr.io/vijay-1806/biometrics-authentication-frontend:${IMAGE_TAG:-1.2}
+    image: docker.io/${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME to the image publisher}/biometrics-authentication-frontend:${IMAGE_TAG:-1.2}
   backend:
     pull_policy: missing
-    image: ghcr.io/vijay-1806/biometrics-authentication-backend:${IMAGE_TAG:-1.2}
+    image: docker.io/${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME to the image publisher}/biometrics-authentication-backend:${IMAGE_TAG:-1.2}
   ml:
     pull_policy: missing
-    image: ghcr.io/vijay-1806/biometrics-authentication-ml:${IMAGE_TAG:-1.2}
+    image: docker.io/${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME to the image publisher}/biometrics-authentication-ml:${IMAGE_TAG:-1.2}

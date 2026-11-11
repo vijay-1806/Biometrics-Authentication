@@ -189,7 +189,7 @@ flowchart TD
     Source["Push or pull request"] --> Compile["Compile React + Python / check Node"]
     Compile --> Build["Build 3 container images"]
     Build --> Test["Integration + tenant + persistence tests"]
-    Test --> Publish["Publish tested images to GHCR"]
+    Test --> Publish["Publish tested images to Docker Hub"]
     Publish --> Deploy["Deploy to server via SSH"]
     Deploy --> Health{"Healthy?"}
     Health -->|Yes| Live["Record active release"]
@@ -201,12 +201,18 @@ flowchart TD
 | **Build / compile** | Install locked frontend dependencies, build React, compile Python, check Node syntax, validate Compose/scripts, and run six deployment orchestration tests. |
 | **Container build** | Build frontend, backend, and ML images in parallel; pass them onward as workflow artifacts. |
 | **Test** | Run those exact images against a fresh MongoDB; test authentication, role enforcement, WebSockets, SDK delivery, enrollment, 11 SaaS/tenant checks, and persistence after container recreation. |
-| **Publish** | Push the tested images to GHCR without rebuilding. Create a deployment bundle pinned to image digests. |
+| **Publish** | Push the tested images to Docker Hub without rebuilding. Create a deployment bundle pinned to image digests. |
 | **Deploy** | Transfer the bundle over verified SSH, pull images, update Docker Compose, check health, and restore the previous release on rollout failure. Optionally check the public application URL too. |
 
 Pull requests stop after testing. Main-branch pushes continue to publishing and, once configured, deployment. Failed integration runs upload Compose logs for diagnosis. Production deployment is serialized to prevent overlapping updates.
 
-Images are published under `ghcr.io/vijay-1806/biometrics-authentication-{frontend,backend,ml}`, with `1.2` and `sha-<full-commit-sha>` tags. The deployment bundle uses immutable **digest references**, so production receives the images that passed the tests. Images target Linux amd64.
+Images are published under `docker.io/<docker-hub-username>/biometrics-authentication-{frontend,backend,ml}`, with `1.2` and `sha-<full-commit-sha>` tags. The deployment bundle uses immutable **digest references**, so production receives the images that passed the tests. Images target Linux amd64.
+
+### Configure Docker Hub publishing
+
+1. In your Docker Hub account, create `biometrics-authentication-frontend`, `biometrics-authentication-backend`, and `biometrics-authentication-ml`. Choose public repositories to allow teammates to pull without signing in.
+2. In GitHub **Settings → Secrets and variables → Actions**, add the repository variable `DOCKERHUB_USERNAME` with your Docker Hub username and the repository secret `DOCKERHUB_TOKEN` with a Docker Hub access token that has Read and Write permissions.
+3. Push to `main` or run **Actions → CI / CD → Run workflow** on `main`. The workflow publishes after the build and integration tests pass.
 
 ### Activate automatic deployment
 
@@ -217,19 +223,25 @@ The deploy job is implemented for a Linux server reached over SSH, including AWS
 3. Under **Settings → Secrets and variables → Actions → Variables**, set `DEPLOY_HOST`, `DEPLOY_USER`, optional `DEPLOY_PORT` (default `22`), and optional `DEPLOY_URL` (your HTTPS app URL).
 4. Set the repository variable `DEPLOY_ENABLED=true` after the host and secrets are ready, then push to `main`.
 
-The pipeline uses its temporary `GITHUB_TOKEN` to pull even private GHCR images on the server. No Docker Hub credentials or long-lived GHCR token are required. SSH credentials are kept out of release artifacts, and the temporary registry login is removed after deployment.
+The deployment server can pull public Docker Hub images anonymously. For private images, set the repository variable `DEPLOY_DOCKERHUB_USERNAME` and the `production` environment secret `DEPLOY_DOCKERHUB_TOKEN` with a separate read-only Docker Hub token. The deployment script removes its temporary Docker login after use.
 
 Releases live at `~/biometrics-authentication/releases/<commit-sha>-<run-id>-<attempt>`. The `current` and `previous` symlinks track successful deployments. Persistent volumes and `~/biometrics-authentication/config.env` survive updates. The supplied ports bind to localhost; point your server's HTTPS reverse proxy at port 8080. See the [deployment guide](docs/deployment.md) for setup, health checks, and rollback.
 
 ### Run published images
 
-After the first successful publish, set each GHCR package to **public** if you want anonymous pulls. Otherwise authenticate with `docker login ghcr.io` using an account/token with package read access.
+After the first successful publish, clone the repository or update your clone to the current `main`. Add this line to a `.env` file in the project root, replacing the placeholder with the publisher's Docker Hub username:
 
-From a clone of this branch:
+```dotenv
+DOCKERHUB_USERNAME=your-dockerhub-username
+```
+
+Run the frontend, backend, ML service, and MongoDB together:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d --no-build --pull always --wait
 ```
+
+Open [LuminaLMS](http://localhost:8080) and the [BioAuth console](http://localhost:8000). Public images support anonymous pulls. For private images, run `docker login` with a Docker Hub account that has read access first.
 
 For a reproducible release or rollback, set `IMAGE_TAG=sha-<full-commit-sha>` in `.env` so all three services use the same verified revision. Source builds remain available on Docker-supported architectures; published images currently target Linux amd64.
 
@@ -295,7 +307,7 @@ docker-compose.deploy.yml        Digest-pinned server deployment manifest
 | A service is unhealthy | Run `docker compose ps` and `docker compose logs <service>`. |
 | Demo courses or trained users are missing | Run `docker compose up` to rebuild the source images and run the automatic demo bootstrap. Inspect `docker compose logs backend ml` if seeding reports an account ID conflict. |
 | Teacher signup is unavailable | Provision the account with the explicit staff command above. |
-| GHCR pull is denied | Make the three packages public or log in with package read permission. |
+| Docker Hub pull is denied | Check the publisher username and tag. Sign in with read access for private repositories. |
 | Behaviour score is unavailable | Complete enrollment and inspect `docker compose logs ml backend`. |
 
 ## Documentation
