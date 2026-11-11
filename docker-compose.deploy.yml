@@ -1,4 +1,4 @@
-# Standalone deployment manifest. Images are pinned by digest in release.env.
+# Deployment manifest. The application image is pinned by digest in release.env.
 name: biometrics-authentication
 services:
   mongo:
@@ -18,6 +18,8 @@ services:
       retries: 12
       start_period: 20s
   ml:
+    command: [uvicorn, 'main:app', --app-dir, behavioral-auth-ml-service/backend, --host, '0.0.0.0', --port, '8000', --workers, '1', --proxy-headers]
+    user: "10001:10001"
     restart: unless-stopped
     environment:
       MONGO_URI: mongodb://mongo:27017/lms_demo
@@ -40,8 +42,11 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
-    image: ${ML_IMAGE:?Use release.env from a successful pipeline}
+    image: ${BIOAUTH_IMAGE:?Use release.env from a successful pipeline}
   backend:
+    command: [node, /app/backend-entrypoint.cjs]
+    user: "1000:1000"
+    working_dir: /app/backend
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -67,8 +72,9 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
-    image: ${BACKEND_IMAGE:?Use release.env from a successful pipeline}
+    image: ${BIOAUTH_IMAGE:?Use release.env from a successful pipeline}
   frontend:
+    command: [nginx, -g, 'daemon off;']
     restart: unless-stopped
     ports:
     - 127.0.0.1:${APP_PORT:-8080}:8080
@@ -88,7 +94,7 @@ services:
       timeout: 5s
       retries: 6
       start_period: 10s
-    image: ${FRONTEND_IMAGE:?Use release.env from a successful pipeline}
+    image: ${BIOAUTH_IMAGE:?Use release.env from a successful pipeline}
 volumes:
   mongo-data: null
   ml-data: null

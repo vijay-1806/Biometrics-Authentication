@@ -33,6 +33,21 @@ This repository contains both the **learning application** and the **Biometrics-
 
 ## Quick start
 
+### Run from Docker Hub
+
+After the first successful publish, replace `YOUR_DOCKERHUB_USERNAME` with the publisher's Docker Hub username. Start Docker Desktop or Docker Engine in Linux-container mode, then run:
+
+```bash
+docker pull YOUR_DOCKERHUB_USERNAME/biometrics-authentication:latest
+docker run -d --name bioauth -p 127.0.0.1:8080:8080 -p 127.0.0.1:8000:8000 -v bioauth-data:/var/lib/bioauth YOUR_DOCKERHUB_USERNAME/biometrics-authentication:latest
+```
+
+Open [LuminaLMS](http://localhost:8080) and the [BioAuth console](http://localhost:8000). The image contains Nginx, the React app, the Node API, FastAPI, and MongoDB 7. The named volume preserves data if you recreate the container. Use `docker logs -f bioauth` to follow startup and `docker stop bioauth` to stop the app. Start it again with `docker start bioauth`.
+
+Public repositories support anonymous pulls. For a private repository, run `docker login` first. The published image targets Linux amd64. Select `1.2` or `sha-<full-commit-sha>` in both commands to run a specific published revision.
+
+### Build from source with Compose
+
 **Requirements:** Git and Docker with Docker Compose v2.20 or newer. Start Docker Desktop or your Docker Engine first. Internet access is needed for the first build.
 
 Clone the main branch:
@@ -187,9 +202,9 @@ The [GitHub Actions workflow](.github/workflows/ci-cd.yml) runs for pull request
 ```mermaid
 flowchart TD
     Source["Push or pull request"] --> Compile["Compile React + Python / check Node"]
-    Compile --> Build["Build 3 container images"]
+    Compile --> Build["Build one BioAuth image"]
     Build --> Test["Integration + tenant + persistence tests"]
-    Test --> Publish["Publish tested images to Docker Hub"]
+    Test --> Publish["Publish tested image to Docker Hub"]
     Publish --> Deploy["Deploy to server via SSH"]
     Deploy --> Health{"Healthy?"}
     Health -->|Yes| Live["Record active release"]
@@ -199,18 +214,18 @@ flowchart TD
 | Stage | What happens |
 | --- | --- |
 | **Build / compile** | Install locked frontend dependencies, build React, compile Python, check Node syntax, validate Compose/scripts, and run six deployment orchestration tests. |
-| **Container build** | Build frontend, backend, and ML images in parallel; pass them onward as workflow artifacts. |
-| **Test** | Run those exact images against a fresh MongoDB; test authentication, role enforcement, WebSockets, SDK delivery, enrollment, 11 SaaS/tenant checks, and persistence after container recreation. |
-| **Publish** | Push the tested images to Docker Hub without rebuilding. Create a deployment bundle pinned to image digests. |
+| **Container build** | Build one BioAuth image with the frontend, backend, ML service, and MongoDB. Export it as a workflow artifact. |
+| **Test** | Start the exact image with `docker run` and its bundled MongoDB. Test authentication, role enforcement, WebSockets, SDK delivery, enrollment, 11 SaaS/tenant checks, and persistence after container recreation. |
+| **Publish** | Push the tested image to Docker Hub. Create a deployment bundle pinned to its digest. |
 | **Deploy** | Transfer the bundle over verified SSH, pull images, update Docker Compose, check health, and restore the previous release on rollout failure. Optionally check the public application URL too. |
 
-Pull requests stop after testing. Main-branch pushes continue to publishing and, once configured, deployment. Failed integration runs upload Compose logs for diagnosis. Production deployment is serialized to prevent overlapping updates.
+Pull requests stop after testing. Main-branch pushes continue to publishing and, once configured, deployment. Failed integration runs upload container logs for diagnosis. Production deployment is serialized to prevent overlapping updates.
 
-Images are published under `docker.io/<docker-hub-username>/biometrics-authentication-{frontend,backend,ml}`, with `1.2` and `sha-<full-commit-sha>` tags. The deployment bundle uses immutable **digest references**, so production receives the images that passed the tests. Images target Linux amd64.
+The workflow publishes `docker.io/<docker-hub-username>/biometrics-authentication` with `latest`, `1.2`, and `sha-<full-commit-sha>` tags. The SSH deployment uses the same image digest for the frontend, backend, and ML services with separate commands and volumes.
 
 ### Configure Docker Hub publishing
 
-1. In your Docker Hub account, create `biometrics-authentication-frontend`, `biometrics-authentication-backend`, and `biometrics-authentication-ml`. Choose public repositories to allow teammates to pull without signing in.
+1. In your Docker Hub account, create one repository named `biometrics-authentication`. Choose Public to let teammates pull the image without signing in.
 2. In GitHub **Settings → Secrets and variables → Actions**, add the repository variable `DOCKERHUB_USERNAME` with your Docker Hub username and the repository secret `DOCKERHUB_TOKEN` with a Docker Hub access token that has Read and Write permissions.
 3. Push to `main` or run **Actions → CI / CD → Run workflow** on `main`. The workflow publishes after the build and integration tests pass.
 
@@ -223,27 +238,9 @@ The deploy job is implemented for a Linux server reached over SSH, including AWS
 3. Under **Settings → Secrets and variables → Actions → Variables**, set `DEPLOY_HOST`, `DEPLOY_USER`, optional `DEPLOY_PORT` (default `22`), and optional `DEPLOY_URL` (your HTTPS app URL).
 4. Set the repository variable `DEPLOY_ENABLED=true` after the host and secrets are ready, then push to `main`.
 
-The deployment server can pull public Docker Hub images anonymously. For private images, set the repository variable `DEPLOY_DOCKERHUB_USERNAME` and the `production` environment secret `DEPLOY_DOCKERHUB_TOKEN` with a separate read-only Docker Hub token. The deployment script removes its temporary Docker login after use.
+The deployment server can pull the public Docker Hub image anonymously. For private images, set the repository variable `DEPLOY_DOCKERHUB_USERNAME` and the `production` environment secret `DEPLOY_DOCKERHUB_TOKEN` with a separate read-only Docker Hub token. The deployment script removes its temporary Docker login after use.
 
 Releases live at `~/biometrics-authentication/releases/<commit-sha>-<run-id>-<attempt>`. The `current` and `previous` symlinks track successful deployments. Persistent volumes and `~/biometrics-authentication/config.env` survive updates. The supplied ports bind to localhost; point your server's HTTPS reverse proxy at port 8080. See the [deployment guide](docs/deployment.md) for setup, health checks, and rollback.
-
-### Run published images
-
-After the first successful publish, clone the repository or update your clone to the current `main`. Add this line to a `.env` file in the project root, replacing the placeholder with the publisher's Docker Hub username:
-
-```dotenv
-DOCKERHUB_USERNAME=your-dockerhub-username
-```
-
-Run the frontend, backend, ML service, and MongoDB together:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d --no-build --pull always --wait
-```
-
-Open [LuminaLMS](http://localhost:8080) and the [BioAuth console](http://localhost:8000). Public images support anonymous pulls. For private images, run `docker login` with a Docker Hub account that has read access first.
-
-For a reproducible release or rollback, set `IMAGE_TAG=sha-<full-commit-sha>` in `.env` so all three services use the same verified revision. Source builds remain available on Docker-supported architectures; published images currently target Linux amd64.
 
 ## Develop without Docker
 
@@ -293,7 +290,7 @@ docker/                          Nginx configuration and backend startup
 docs/                            Architecture, security, deployment, and demo guides
 scripts/                         Development helpers and integration smoke test
 docker-compose.yml               One-command demo stack with synthetic demo data and models
-docker-compose.registry.yml      Optional published-image overlay
+Dockerfile                       All-in-one image published to Docker Hub
 docker-compose.deploy.yml        Digest-pinned server deployment manifest
 ```
 

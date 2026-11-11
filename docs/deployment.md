@@ -34,18 +34,18 @@ The build context excludes environment files, console account exports, encrypted
 The workflow runs on pushes and pull requests targeting `main` and `release/v1.2`. Publishing and deployment run only for successful `main` pushes. It has five ordered stages:
 
 1. **Compile:** install locked frontend dependencies; compile the React production bundle and Python bytecode; syntax-check Node source and deployment scripts; validate Compose; run six tests of deployment success, pull failure, unhealthy rollout, route-health failure, first-install failure, and deployment locking.
-2. **Build:** build the frontend, Node API, and Python images in parallel for `linux/amd64`. Export each as a workflow artifact.
-3. **Test:** load those exact images and start the full stack with `--no-build`. Run the authentication/WebSocket/biometric smoke test, 11 existing SaaS and tenant tests, and container-recreation persistence checks. On failure, upload diagnostics.
-4. **Publish:** after all tests pass, load the same artifacts and publish the tested images to Docker Hub. Publish `sha-<full-commit-sha>` and moving `1.2` tags. Create a release bundle containing `compose.yml`, `release.env` with digest-pinned images, and `deploy.sh`.
+2. **Build:** build one image for `linux/amd64` containing the frontend, Node API, Python ML service, and MongoDB 7. Export it as a workflow artifact.
+3. **Test:** load that exact image and start the stack with `docker run`. Run the authentication/WebSocket/biometric smoke test, 11 existing SaaS and tenant tests, and container-recreation persistence checks. On failure, upload diagnostics.
+4. **Publish:** after all tests pass, load the same artifacts and publish the tested image to Docker Hub under `biometrics-authentication` with `sha-<full-commit-sha>`, `1.2`, and `latest` tags. Create a release bundle containing `compose.yml`, `release.env` with the application image digest, and `deploy.sh`.
 5. **Deploy:** when explicitly enabled, transfer the release bundle to the server over SSH, pull images before changing the application, update Compose, check container and proxied API health, and record the active release. Failed rollouts restore the previously successful release and still fail the workflow.
 
 PR runs stop after testing. The GitHub token has `contents: read`. The publish job authenticates to Docker Hub using the configured access token. Actions are pinned to commit SHAs. Image artifacts expire after two days, release bundles after 30 days, and frontend bundles/failed-test diagnostics after seven days.
 
-The workflow can be manually dispatched when present on the default branch. Pushes to `release/v1.2` run without changing the default branch. The standalone production manifest has no build directives.
+The workflow can be manually dispatched when present on the default branch. Pushes to `release/v1.2` run without changing the default branch. The production manifest runs the same application image as three services with separate startup commands. Its MongoDB 8 service and volumes remain independent of the single-container demo.
 
 ### First-run repository settings
 
-Create the three Docker Hub repositories and configure `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` as described in [Configure Docker Hub publishing](../README.md#configure-docker-hub-publishing).
+Create the Docker Hub repository and configure `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` as described in [Configure Docker Hub publishing](../README.md#configure-docker-hub-publishing).
 
 Optionally require the compile, container build, and integration jobs as branch checks.
 
@@ -113,15 +113,9 @@ DEPLOY_ROOT="$HOME/biometrics-authentication" bash "$HOME/biometrics-authenticat
 
 For private images, authenticate to the registry that hosts the previous images before a manual rollback if the image layers are not already cached.
 
-## Manual published-image deployment
+## Run the published demo image
 
-Set `DOCKERHUB_USERNAME` in `.env` to the Docker Hub publisher's username, then run the registry overlay from the repository root:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d --no-build --pull always --wait
-```
-
-Set `IMAGE_TAG=sha-<full-commit-sha>` in `.env` to select a revision for all three services. For private repositories, run `docker login` with a Docker Hub account that has read access. Public repositories support anonymous pulls. This convenience command is separate from the automatic deployment bundle, which pins images by digest.
+Use the [Docker Hub quick start](../README.md#run-from-docker-hub) to launch the full demo with Docker. Its `bioauth-data` volume contains MongoDB data, ML profiles and models, and the generated LMS signing key.
 
 ## Before public hosting
 
